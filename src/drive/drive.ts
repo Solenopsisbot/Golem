@@ -139,6 +139,7 @@ export class Drive {
   }
 
   onReflex(ev: ReflexEvent): void {
+    if (/ fired$/.test(ev.note)) return;   // engine-level "fired" with no note: not worth a prompt line
     this.journal.note(`reflex ${ev.name}: ${ev.note}`);
     this.push({ kind: "reflex", priority: ev.name === "self_preservation" ? 65 : 30, text: `${ev.name}: ${ev.note}` });
   }

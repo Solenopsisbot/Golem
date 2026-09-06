@@ -136,7 +136,7 @@ export const itemCollecting: Reflex<Entity> = {
   },
   async act(p, it) {
     await p.goto({ x: Math.floor(it.x), y: Math.floor(it.y), z: Math.floor(it.z) }, { reach: 1, timeoutMs: 8000, retry: false }).catch(() => {});
-    return `walked to a dropped item ${it.distance.toFixed(1)}m away`;
+    return undefined;   // the pickup itself is visible in the inventory; no need to narrate it
   },
 };
 

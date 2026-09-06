@@ -19,8 +19,10 @@ export interface Reflex<T = unknown> {
   cooldownMs?: number;       // minimum gap between firings
   /** Cheap check on the mirror. Return a truthy trigger to act. */
   check(ctx: Ctx): T | null | undefined | false | Promise<T | null | undefined | false>;
-  /** Do the thing. Return a one-line note for the inbox, or nothing. */
+  /** Do the thing. Return a one-line note for the inbox, or nothing (nothing = don't tell the mind). */
   act(p: Primitives, trigger: T): Promise<string | void>;
+  /** Tell the mind even when act() returns nothing (default: only interrupting reflexes). */
+  notify?: boolean;
 }
 
 export interface ReflexEvent { name: string; note: string; at: number; trigger: unknown }
@@ -99,9 +101,9 @@ export class ReflexEngine {
         try {
           const note = await r.act(p, trigger);
           const text = note ?? `${r.name} fired`;
-          this.log.info(`reflex ${r.name}: ${text}`);
+          if (note || r.interrupts) this.log.info(`reflex ${r.name}: ${text}`); else this.log.debug(`reflex ${r.name}: ${text}`);
           this.ctx.trace.mark("reflex", { name: r.name, phase: "end", note: text });
-          this.opts.onFire?.({ name: r.name, note: text, at: Date.now(), trigger });
+          if (note || r.interrupts || r.notify) this.opts.onFire?.({ name: r.name, note: text, at: Date.now(), trigger });
         } catch (e) {
           const msg = e instanceof GolemError ? `${e.kind}: ${e.message}` : String(e);
           this.log.warn(`reflex ${r.name} failed: ${msg}`);
