@@ -27,8 +27,22 @@ if [[ -n $left ]]; then
   kill -9 $left 2>/dev/null || true
   sleep 2
 fi
-ports=$(lsof -nP -iTCP -sTCP:LISTEN -t 2>/dev/null | while read -r pid; do ps -o command= -p "$pid" | grep -qE 'mezzoclef|launcher\.jar' && echo "$pid"; done || true)
-[[ -n $ports ]] && { echo "ERROR: a Clef process still holds a port: $ports"; exit 1; }
+# A killed JVM can take a few seconds to release its listener; wait for it rather than fail.
+clef_port_holders() {
+  lsof -nP -iTCP -sTCP:LISTEN -t 2>/dev/null | sort -u | while read -r pid; do
+    ps -o command= -p "$pid" 2>/dev/null | grep -qE 'mezzoclef|launcher\.jar|fabric' && echo "$pid"
+  done || true
+}
+for _ in $(seq 1 30); do
+  ports=$(clef_port_holders)
+  [[ -z $ports ]] && break
+  sleep 1
+done
+if [[ -n $ports ]]; then
+  echo "ERROR: a Clef process still holds a port after 30s: $ports"
+  for pid in $ports; do ps -o pid=,etime=,command= -p "$pid" | cut -c1-160; done
+  exit 1
+fi
 
 [[ -f data/up.log ]] && mv data/up.log data/up.prev.log   # keep the last run: the shutdown log is the evidence when a body survives
 GOLEM_LOG=${GOLEM_LOG:-info} nohup node src/cli/golem.ts up "$@" > data/up.log 2>&1 &
