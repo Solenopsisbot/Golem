@@ -87,6 +87,8 @@ export const CommsSection = z.object({
     cooldown: DurationString.default("2m"),
   }).prefault({}),
   fleets: z.array(z.string()).default([]),
+  /** One chest/place index for the whole fleet (data/shared/world), linked into every workspace as world/shared. */
+  share_world: z.boolean().default(true),
 });
 
 export const RegionSchema = z.object({
@@ -191,6 +193,7 @@ export interface AgentConfig {
   clefDir: string;        // data/<name>/clef (game dir)
   shotsDir: string;       // data/<name>/shots
   tracePath: string;      // data/<name>/trace.jsonl
+  sharedWorldDir: string | undefined;   // data/shared/world when comms.share_world; every agent in the fleet reads and writes it
   body: {
     username: string;
     attach: { host: string; port: number } | undefined;

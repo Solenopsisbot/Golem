@@ -239,19 +239,20 @@ export async function openContainer(ctx: Ctx, p: Pos): Promise<ContainerResult> 
     let c: ContainerResult;
     try { c = (await ctx.body.call("container")) as ContainerResult; }
     catch (e) { throw fromClef(e, "container"); }
-    lastOpened = { pos: p, handler: c.handler };
-    try { recordChest(ctx.agent.workspaceDir, p, ctx.mirror.dimension, c.handler, c.slots); } catch { /* index is best-effort */ }
+    const kind = await blockAt(ctx, p).then((b) => b.short).catch(() => undefined);
+    lastOpened = { pos: p, handler: c.handler, kind };
+    try { recordChest(ctx.agent, p, ctx.mirror.dimension, c.handler, c.slots, { kind }); } catch { /* index is best-effort */ }
     return c;
   });
 }
 
 /** The container most recently opened via openContainer, for re-indexing after transfers. */
-let lastOpened: { pos: Pos; handler: string } | null = null;
+let lastOpened: { pos: Pos; handler: string; kind?: string } | null = null;
 async function reindexOpen(ctx: Ctx): Promise<void> {
   if (!lastOpened || !ctx.mirror.screen) return;
   try {
     const c = (await ctx.body.call("container")) as ContainerResult;
-    recordChest(ctx.agent.workspaceDir, lastOpened.pos, ctx.mirror.dimension, c.handler, c.slots);
+    recordChest(ctx.agent, lastOpened.pos, ctx.mirror.dimension, c.handler, c.slots, { kind: lastOpened.kind });
   } catch { /* best-effort */ }
 }
 

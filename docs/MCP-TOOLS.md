@@ -143,6 +143,20 @@ Tools are grouped and named with a short prefix so they sort together in the age
 | Tool | Args | What it does |
 |---|---|---|
 | `shem_check` | path, source | Check a Shem script file (path under your workspace, or lib/<name>) without running it: syntax, unknown names, arity, unknown block/item ids, bare numbers where durations go. |
+| `shem_run` | path, script, params, priority, interrupt, background, timeout_s | Run a script from a file. `path` is the file (shem/mine.shem, or lib/wood for the standard library); `script` is the script name inside it (required when the file has several, e.g. lib/craft has make_planks, make_sticks, table_here, wooden_tools); `params` are the script's own parameters as JSON. Blocks until it ends or timeout_s passes (the run keeps going; use shem_status/shem_wait). background: true returns immediately. interrupt: true preempts a lower-priority foreground run. |
+| `shem_eval` | code, params, timeout_s, background | Run a Shem snippet (statements, or a whole file with script declarations) without saving it. Good for one-off actions and for trying a script before writing it. |
+| `shem_status` | run | Status and trace tail of a run. |
+| `shem_wait` | run, timeout_s | Wait for a run to end (bounded). |
+| `shem_cancel` | run | Cancel a run, or every active run when omitted. |
+| `shem_runs` |  | Active and recent runs. |
+| `shem_list` |  | Index of every script you can run: yours under shem/, the standard library under lib/, and reflexes. |
+| `shem_doc` | name | Documentation for a Shem function, getter, event, or library script by name. |
+
+## Scripts (Shem)
+
+| Tool | Args | What it does |
+|---|---|---|
+| `shem_check` | path, source | Check a Shem script file (path under your workspace, or lib/<name>) without running it: syntax, unknown names, arity, unknown block/item ids, bare numbers where durations go. |
 | `shem_run` | path, script, params, priority, interrupt, background, timeout_s | Run a script from a file (path under your workspace, or lib/<name>). Blocks until it ends or timeout_s passes (the run keeps going in that case; use shem_status/shem_wait). background: true returns immediately. interrupt: true preempts a lower-priority foreground run. |
 | `shem_eval` | code, params, timeout_s, background | Run a Shem snippet (statements, or a whole file with script declarations) without saving it. Good for one-off actions and for trying a script before writing it. |
 | `shem_status` | run | Status and trace tail of a run. |

@@ -68,6 +68,7 @@ export function resolveAgent(loaded: LoadedConfig, name: string): AgentConfig {
     clefDir: resolve(dataDir, "clef"),
     shotsDir: resolve(dataDir, "shots"),
     tracePath: resolve(dataDir, "trace.jsonl"),
+    sharedWorldDir: config.comms.share_world ? resolve(dataRoot, "shared", "world") : undefined,
     body: {
       username: a.body.username ?? a.name,
       attach,

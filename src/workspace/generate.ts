@@ -2,8 +2,8 @@
 // (AGENTS.md, with CLAUDE.md and GEMINI.md pointing at it), seeds memory/, and keeps the tool
 // cheatsheet current. persona.md is copied from the configured persona once and then left alone:
 // it is the human's file.
-import { copyFileSync, existsSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { relative, resolve } from "node:path";
 import type { AgentConfig } from "../config/schema.ts";
 
 export interface ToolDoc { name: string; description: string }
@@ -23,8 +23,33 @@ const SEEDS: Record<string, string> = {
   "memory/notes.md": "# Notes\n\nAnything worth keeping between sessions.\n",
   "memory/goal.md": "",
   "shem/README.md": "# shem/\n\nScripts live here once the Shem language ships (M3). Until then, use the tools directly.\n",
-  "world/README.md": "# world/\n\nGolem writes what it learns about the world here (chests, deaths, places seen). Read it; don't edit it.\n",
+  "world/README.md": "# world/\n\nGolem writes what it learns about the world here (chests, deaths, places seen). Read it; don't edit it. `world/shared/`, when present, is the same for every golem in the fleet.\n",
 };
+
+const SHARED_SEEDS: Record<string, string> = {
+  "places.md": "# Shared places\n\nEvery golem in this fleet reads and edits this file. One per line: `name: (x, y, z) dimension — note`. Bases, farms, portals, danger spots, where the good ore was.\n",
+  "README.md": "# world/shared/\n\nShared by every golem in the fleet. `chests.md` is Golem's index of every container any of you has opened (read-only; open a container to refresh it). `places.md` is yours together.\n",
+};
+
+/** Create the fleet's shared world dir (if configured) and link it into this workspace as world/shared. */
+function linkSharedWorld(agent: AgentConfig): void {
+  const target = agent.sharedWorldDir;
+  const link = resolve(agent.workspaceDir, "world", "shared");
+  if (!target) {
+    try { if (lstatSync(link).isSymbolicLink()) unlinkSync(link); } catch { /* not there */ }
+    return;
+  }
+  mkdirSync(target, { recursive: true });
+  for (const [rel, content] of Object.entries(SHARED_SEEDS)) { const p = resolve(target, rel); if (!existsSync(p)) writeFileSync(p, content); }
+  const want = relative(resolve(agent.workspaceDir, "world"), target);
+  try {
+    const st = lstatSync(link);
+    if (st.isSymbolicLink()) { if (readLinkSafe(link) === want) return; unlinkSync(link); }
+    else return;   // a real directory named shared: leave it alone
+  } catch { /* nothing there yet */ }
+  symlinkSync(want, link, "dir");
+}
+function readLinkSafe(p: string): string | undefined { try { return readlinkSync(p); } catch { return undefined; } }
 
 export function ensureWorkspace(agent: AgentConfig): string {
   const ws = agent.workspaceDir;
@@ -33,6 +58,7 @@ export function ensureWorkspace(agent: AgentConfig): string {
     const p = resolve(ws, rel);
     if (!existsSync(p)) writeFileSync(p, content);
   }
+  linkSharedWorld(agent);
   const persona = resolve(ws, "persona.md");
   if (!existsSync(persona)) {
     if (agent.personaPath && existsSync(agent.personaPath)) copyFileSync(agent.personaPath, persona);
@@ -88,7 +114,8 @@ Chat policy: you hear ${agent.chat.listen === "all" ? "everything" : agent.chat.
 - \`memory/goal.md\`: your standing goal${goal ? ` (currently: ${goal})` : " (none)"}. Set it with the \`goal_set\` tool.
 - \`memory/places.md\`, \`memory/people.md\`, \`memory/notes.md\`: yours. Edit them freely; they persist across sessions.
 - \`memory/journal/\`: a daily log Golem writes for you (deaths, reflexes, chat). Read yesterday's if you're unsure what happened.
-- \`world/\`: what Golem has recorded about the world (chests seen, deaths). Read-only.
+- \`world/\`: what Golem has recorded about the world (chests seen, deaths). Read-only.${agent.sharedWorldDir ? `
+- \`world/shared/\`: shared with every golem in this fleet. \`chests.md\` is Golem's index of every container any of you has opened, with who last looked (read-only). \`places.md\` is yours together: bases, farms, danger spots. Read it before asking another golem where something is; write to it when you build or find something the others should know.` : ""}
 - \`shem/\`: your Shem scripts (see below). \`shem/lib/\` is the read-only standard library.
 - \`shots/\`: screenshots you take with \`see\` and \`map\`.
 

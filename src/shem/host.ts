@@ -110,7 +110,7 @@ export function makeShemHost(rt: AgentRuntime): Host {
   def("chat_history", async (p, a, n) => (await p.chatHistory(toNum(arg(a, n, 0, "limit") ?? 20))).map((l) => ({ sender: l.sender ?? null, text: l.text, kind: l.kind })));
   def("places", () => readPlaces());
   def("place_of", (_p, a, n) => readPlaces().get(toStr(arg(a, n, 0, "name") ?? "")) ?? null);
-  def("chests_with", (_p, a, n) => chestsWith(agent.workspaceDir, toStr(arg(a, n, 0, "item") ?? "")).map((c) => ({ pos: new Vec3(c.x, c.y, c.z, true), items: new ShemMap(Object.entries(c.items)) })));
+  def("chests_with", (_p, a, n) => chestsWith(agent, toStr(arg(a, n, 0, "item") ?? "")).map((c) => ({ pos: new Vec3(c.x, c.y, c.z, true), items: new ShemMap(Object.entries(c.items)) })));
   def("path_exists", async (p, a, n) => (await p.navCheck(posOf(arg(a, n, 0, "pos") ?? null), toNum(arg(a, n, 1, "reach") ?? 1))).reachable);
 
   // ---- movement ----
