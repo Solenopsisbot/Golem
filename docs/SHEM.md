@@ -144,7 +144,7 @@ Blocking unless stated. Default timeouts in brackets. "Clef:" names the commands
 | `move(dir: "forward", dur: 500ms, sprint?, jump?)` / `jump()` / `sneak(on)` / `sprint(on)` / `stop()` | Raw input. Clef: `move`, `stopMove`. |
 | `flee(from: entity | list<entity> | pos, dist: 16)` | Pick a point away from all sources, `goto` it. |
 | `wander(radius: 12)` | Random reachable point. |
-| `explore(dir?)`, `goto_surface()`, `dig_down(n)`, `tunnel(dir, n)` | Baritone `explore`, plus Golem-side digging loops with safety checks (no digging into lava or air). |
+| `explore(for?)`, `surface(timeout?)`, `dig_down(n)`, `tunnel(dir, n)` | Baritone `explore`, plus Golem-side digging loops with safety checks (no digging into lava or air). |
 | `path_exists(pos)` | Non-blocking estimate. **Needs #7** (`nav.check`) for a true answer. |
 
 ### Actions [15s unless noted]
@@ -264,3 +264,7 @@ type        = IDENT [ "<" type { "," type } ">" ] [ "?" ] ;
 ```
 
 `here`, `eye`, `me`, `now`, `inventory`, `container`, `health`, `food`, `time` and friends are ordinary identifiers bound in the root scope, not keywords.
+
+## Saving from a snippet
+
+The `shem_eval` tool takes `save: "shem/name.shem"`: the snippet is checked, written as a script file (bare statements are wrapped as `script main()`), the library index in the orientation is regenerated, and the saved file is run. A new script therefore costs one tool call. Files under `shem/lib/` can't be written this way. `shem_run` also checks before running, so a separate `shem_check` is only for diagnostics without execution.
