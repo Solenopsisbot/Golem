@@ -27,8 +27,8 @@ One hour on normal difficulty with a standing goal: stone tools, a dug shelter, 
 ## M4: Fleet and comms
 Multiple agents in one process, fleet spawning from the launcher jar, the agent bus, conversations, peering between Golem processes, world index shared or per-agent by config.
 
-## M5: Proof
-Eval task harness (`tasks/*.json`, headless server in CI, success predicates), `golem replay`, dashboard polish (multi-agent view, run traces inline). Publish.
+## M5: Proof (in progress)
+Done: eval harness (`golem eval`, RCON resets, predicates, results JSON, four basic tasks), the dashboard. Open: a CI job that boots the dev server and runs `tasks/basic`, `golem replay`, dashboard polish (multi-agent view, run traces inline), more tasks (survival, building, scripts). Publish.
 
 ## Not scheduled, wanted
 Top-down map, annotated screenshots, blueprints and `build`, Ayusami persona bridge, voice, cheap-model helpers via Logfare, session resume across restarts for non-Claude agents.
