@@ -9,7 +9,7 @@ import { GolemError, fromClef, sleep, until } from "./errors.ts";
 import { bestFood, bestTool, inventory, selectItem } from "./inventory.ts";
 import { lookAt } from "./look.ts";
 import { goto, move, jump, navStop } from "./nav.ts";
-import { REPLACEABLE, blockAt, entityById, entities, type Entity } from "./perception.ts";
+import { REPLACEABLE, blockAt, entityById, entities, findBlocks, type Entity } from "./perception.ts";
 import { recordChest } from "../world/chests.ts";
 
 const REACH = 4.5;
@@ -318,6 +318,116 @@ export async function screenshot(ctx: Ctx, opts: ScreenshotOpts = {}): Promise<{
     writeFileSync(path, png);
   }
   return { png, path, width: r.width ?? args.width ?? 0, height: r.height ?? args.height ?? 0, backend: r.backend, ms: r.durationMs ?? 0 };
+}
+
+/** What a furnace turns an item into. Crafting recipes come from minecraft-data; smelting doesn't, so this is the common table. */
+export const SMELT_OUTPUT: Record<string, string> = {
+  raw_iron: "iron_ingot", iron_ore: "iron_ingot", deepslate_iron_ore: "iron_ingot",
+  raw_gold: "gold_ingot", gold_ore: "gold_ingot", deepslate_gold_ore: "gold_ingot", nether_gold_ore: "gold_ingot",
+  raw_copper: "copper_ingot", copper_ore: "copper_ingot", deepslate_copper_ore: "copper_ingot",
+  ancient_debris: "netherite_scrap", sand: "glass", red_sand: "glass", cobblestone: "stone", stone: "smooth_stone",
+  clay_ball: "brick", clay: "terracotta", netherrack: "nether_brick", cactus: "green_dye", kelp: "dried_kelp",
+  wet_sponge: "sponge", beef: "cooked_beef", porkchop: "cooked_porkchop", chicken: "cooked_chicken", mutton: "cooked_mutton",
+  rabbit: "cooked_rabbit", cod: "cooked_cod", salmon: "cooked_salmon", potato: "baked_potato",
+  oak_log: "charcoal", birch_log: "charcoal", spruce_log: "charcoal", jungle_log: "charcoal", acacia_log: "charcoal", dark_oak_log: "charcoal", mangrove_log: "charcoal", cherry_log: "charcoal",
+};
+const FUELS = ["coal", "charcoal", "coal_block", "blaze_rod", "oak_planks", "birch_planks", "spruce_planks", "jungle_planks", "acacia_planks", "dark_oak_planks", "oak_log", "birch_log", "spruce_log", "jungle_log", "stick"];
+
+export interface SmeltOpts { fuel?: string; furnace?: Pos; timeoutMs?: number }
+
+/**
+ * Smelt `n` of an item in a furnace: uses one within 8 blocks, else places one from the inventory.
+ * Shift-clicks fuel and input in (vanilla routes them to the right slots), waits for the output,
+ * pulls it out. Resolves with how many came out.
+ */
+export async function smelt(ctx: Ctx, item: string, n = 1, opts: SmeltOpts = {}): Promise<{ smelted: number; output: string }> {
+  const input = shortId(fullId(item));
+  const output = SMELT_OUTPUT[input];
+  if (!output) throw new GolemError("failed", `don't know what ${input} smelts into`);
+  return ctx.activity.run(`smelt ${n} ${input}`, async () => {
+    const inv = await inventory(ctx);
+    if (!inv.has(input, 1)) throw new GolemError("missing_item", `no ${input} to smelt`);
+    const fuel = opts.fuel ?? FUELS.find((f) => inv.has(f, 1));
+    if (!fuel) throw new GolemError("missing_item", "no fuel (coal, charcoal, planks, logs or sticks)");
+    let furnace = opts.furnace;
+    if (!furnace && ctx.body.caps.has("findBlocks")) {
+      const near = await findBlocks(ctx, ["furnace", "blast_furnace"], { radius: 8, max: 1 }).catch(() => []);
+      if (near[0]) furnace = { x: near[0].x, y: near[0].y, z: near[0].z };
+    }
+    if (!furnace) {
+      if (!inv.has("furnace")) throw new GolemError("missing_item", "no furnace nearby and none in inventory (craft one from 8 cobblestone)");
+      furnace = await placeNearby(ctx, "furnace");
+    }
+    const before = (await inventory(ctx)).count(output);
+    await openContainer(ctx, furnace);
+    try {
+      await deposit(ctx, fuel);
+      await deposit(ctx, input);
+      const timeoutMs = opts.timeoutMs ?? n * 10_000 + 30_000;
+      const t0 = Date.now();
+      let got = 0;
+      for (;;) {
+        ctx.token.throwIfCancelled();
+        const c = await container(ctx);
+        const out = c.slots.find((sl) => sl.slot === 2);
+        got = out && out.item === fullId(output) ? out.count : 0;
+        if (got >= n) break;
+        const inSlot = c.slots.find((sl) => sl.slot === 0);
+        if ((!inSlot || inSlot.item === "empty" || inSlot.item === "minecraft:air") && got > 0) break;   // ran out of input
+        if (Date.now() - t0 > timeoutMs) break;
+        await sleep(2000, ctx.token);
+      }
+      if (got > 0) await withdraw(ctx, output);
+      // leftover fuel/input stay in the furnace for next time
+    } finally {
+      await closeScreen(ctx);
+    }
+    const after = (await inventory(ctx)).count(output);
+    return { smelted: after - before, output };
+  });
+}
+
+/** Place a block on a free spot next to the bot and return where it went. */
+async function placeNearby(ctx: Ctx, item: string): Promise<Pos> {
+  const here = ctx.mirror.blockPos;
+  for (const f of ["north", "east", "south", "west"] as Face[]) {
+    const spot = offset(here, f);
+    const b = await blockAt(ctx, spot);
+    if (!REPLACEABLE.has(b.id)) continue;
+    const below = await blockAt(ctx, offset(spot, "down"));
+    if (!below.solid) continue;
+    await place(ctx, item, spot);
+    return spot;
+  }
+  throw new GolemError("cant_place", `no free spot next to ${fmtPos(here)} for a ${shortId(item)}`);
+}
+
+const BED_KINDS = ["white_bed", "orange_bed", "magenta_bed", "light_blue_bed", "yellow_bed", "lime_bed", "pink_bed", "gray_bed", "light_gray_bed", "cyan_bed", "purple_bed", "blue_bed", "brown_bed", "green_bed", "red_bed", "black_bed"];
+
+/** Find a bed within `radius`, use it, and wait for the server's verdict. */
+export async function sleepInBed(ctx: Ctx, radius = 24): Promise<{ ok: boolean; reason?: string; bed?: Pos }> {
+  return ctx.activity.run("sleep", async () => {
+    let bed: Pos | undefined;
+    if (ctx.body.caps.has("findBlocks")) {
+      const near = await findBlocks(ctx, BED_KINDS, { radius, max: 1 }).catch(() => []);
+      if (near[0]) bed = { x: near[0].x, y: near[0].y, z: near[0].z };
+    }
+    if (!bed) {
+      const inv = await inventory(ctx);
+      const carried = BED_KINDS.find((b) => inv.has(b));
+      if (!carried) throw new GolemError("not_found", `no bed within ${radius} blocks and none in inventory`);
+      bed = await placeNearby(ctx, carried);
+    }
+    ctx.mirror.lastSleep = null;
+    await useOnBlock(ctx, bed);
+    await until(() => ctx.mirror.lastSleep, { timeoutMs: 5000, intervalMs: 200, what: "sleep verdict", token: ctx.token })
+      .catch(() => { throw new GolemError("failed", "the server didn't answer the sleep request (too far, monsters nearby, or not night?)"); });
+    const v = ctx.mirror.lastSleep!;
+    if (!v.ok) return { ok: false, reason: v.reason, bed };
+    // Night skips when everyone sleeps; on a shared server that may never happen.
+    await until(() => ctx.mirror.phase === "day" || ctx.mirror.phase === "dawn", { timeoutMs: 60_000, intervalMs: 1000, what: "morning", token: ctx.token }).catch(() => {});
+    return { ok: true, bed };
+  });
 }
 
 /** Walk over nearby dropped items. */

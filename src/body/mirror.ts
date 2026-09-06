@@ -41,6 +41,7 @@ export class Mirror {
   /** Who hit us last (entityHurt with self:true). */
   lastAttacker: { id: number; type: string; at: number } | null = null;
   lastPickup: { item: string; count: number; at: number } | null = null;
+  lastSleep: { ok: boolean; reason?: string; at: number } | null = null;
   phase: "dawn" | "day" | "dusk" | "night" | undefined;
   day: number | undefined;
   weather: "clear" | "rain" | "thunder" | undefined;
@@ -133,6 +134,7 @@ export class Mirror {
     });
     b.on("itemPickup", (d: { item: string; count: number }) => { this.lastPickup = { ...d, at: Date.now() }; this.inventoryDirty = true; this.changed("itemPickup"); });
     b.on("inventory", () => { this.inventoryDirty = true; });
+    b.on("sleep", (d: { ok: boolean; reason?: string }) => { this.lastSleep = { ok: d.ok, reason: d.reason, at: Date.now() }; this.changed("sleep"); });
     b.on("time", (d: { phase: Mirror["phase"]; day: number }) => { this.phase = d.phase; this.day = d.day; this.changed("time"); });
     b.on("weather", (d: { kind: Mirror["weather"] }) => { this.weather = d.kind; this.changed("weather"); });
     b.on("_reconnected", () => { void this.refresh().catch(() => {}); });

@@ -147,6 +147,8 @@ export function makeShemHost(rt: AgentRuntime): Host {
   def("close", async (p) => { await p.closeScreen(); return null; });
   def("deposit", async (p, a, n) => { const r = await p.deposit(toStr(arg(a, n, 0, "item") ?? "")); return { moved: r.moved }; });
   def("withdraw", async (p, a, n) => { const r = await p.withdraw(toStr(arg(a, n, 0, "item") ?? "")); return { moved: r.moved }; });
+  def("smelt", async (p, a, n) => { const fuel = arg(a, n, 2, "fuel"); const r = await p.smelt(toStr(arg(a, n, 0, "item") ?? ""), toNum(arg(a, n, 1, "n") ?? 1), { fuel: fuel == null ? undefined : toStr(fuel) }); return { smelted: r.smelted, output: r.output }; });
+  def("sleep", async (p, a, n) => { const r = await p.sleepInBed(toNum(arg(a, n, 0, "radius") ?? 24)); return { ok: r.ok, reason: r.reason ?? null, bed: r.bed ? new Vec3(r.bed.x, r.bed.y, r.bed.z, true) : null }; });
   def("collect_drops", async (p, a, n) => { const r = await p.collectDrops(toNum(arg(a, n, 0, "radius") ?? 6)); return { visited: r.visited }; });
   def("remember", (_p, a, n) => { const name = toStr(arg(a, n, 0, "name") ?? ""); const pos = arg(a, n, 1, "pos"); const at = pos == null ? rt.mirror.blockPos : posOf(pos); const note = arg(a, n, 2, "note"); mkdirSync(resolve(agent.workspaceDir, "memory"), { recursive: true }); appendFileSync(placesFile, `- ${name}: (${at.x}, ${at.y}, ${at.z}) ${rt.mirror.dimension.replace("minecraft:", "")}${note ? ` — ${toStr(note)}` : ""}\n`); return null; });
   def("baritone", async (p, a, n) => { await p.baritone(toStr(arg(a, n, 0, "command") ?? "")); return null; });

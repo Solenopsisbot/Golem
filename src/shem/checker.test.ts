@@ -27,7 +27,7 @@ test("checker catches the classic mistakes", () => {
       on damgae(x) { }
       on damage(a, b, c, d) { }
       while (a < 10) { a += 1 }
-      smelt("stone")
+      trade(none, 0)
     }
     script nodoc() { }
     reflex r on tick { }
@@ -41,7 +41,7 @@ test("checker catches the classic mistakes", () => {
   assert.ok(d.some((x) => x.includes("unknown event damgae")));
   assert.ok(d.some((x) => x.includes("event damage provides 3")));
   assert.ok(d.some((x) => x.includes("never waits on the world")));
-  assert.ok(d.some((x) => x.includes("smelt is not implemented")));
+  assert.ok(d.some((x) => x.includes("trade is not implemented")));
   assert.ok(d.some((x) => x.includes("nodoc has no /// doc")));
   assert.ok(d.some((x) => x.includes("reflex r must live in shem/reflexes/")));
   assert.ok(!d.some((x) => x.includes("unknown name here")));

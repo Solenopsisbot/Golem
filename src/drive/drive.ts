@@ -12,7 +12,7 @@ import type { ReflexEvent } from "../reflexes/engine.ts";
 import { fmtPos } from "../util/geom.ts";
 import type { Logger } from "../util/log.ts";
 import { readGoal } from "../workspace/generate.ts";
-import { routeChat, type FastCommand } from "./chat.ts";
+import { parseFastCommand, routeChat, type FastCommand } from "./chat.ts";
 import { Inbox, renderInbox, type InboxItem } from "./inbox.ts";
 import { Journal, Transcript } from "./transcript.ts";
 import type * as acp from "@agentclientprotocol/sdk";
@@ -72,6 +72,12 @@ export class Drive {
   /** From the bridge: an outside system (Discord, a test REPL) putting words in the inbox. */
   pushExternal(b: { text: string; from?: string; kind?: string; priority?: number }): InboxItem {
     const owner = b.from ? this.rt.agent.players.owners.includes(b.from) : false;
+    if (owner) {
+      // Bridge messages are implicitly addressed to the agent, so owners get the same fast path
+      // as in-game chat: "goal ...", "met", "mode x off" never need to wake the mind.
+      const fast = parseFastCommand(b.text);
+      if (fast) { void this.handleFast(fast, b.from!); return { id: -1, t: Date.now(), kind: "system", priority: 0, text: `(fast path: ${fast.name})`, from: b.from }; }
+    }
     return this.push({ kind: (b.kind as InboxItem["kind"]) ?? "bridge", priority: b.priority ?? (owner ? 80 : 50), text: b.text, from: b.from });
   }
 

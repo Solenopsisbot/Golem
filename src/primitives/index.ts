@@ -72,6 +72,8 @@ export function makePrimitives(ctx: Ctx) {
     map: bind(ctx, actions.map),
     screenshot: bind(ctx, actions.screenshot),
     collectDrops: bind(ctx, actions.collectDrops),
+    smelt: bind(ctx, actions.smelt),
+    sleepInBed: bind(ctx, actions.sleepInBed),
     // speech
     say: bind(ctx, chat.say),
     whisper: bind(ctx, chat.whisper),
