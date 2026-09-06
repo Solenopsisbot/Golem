@@ -1,0 +1,19 @@
+# Eval fleet: a second agent on its own ports so evals can run while the main fleet plays.
+[fleet]
+name = "eval"
+data_dir = "./data"
+mcp_bind = "127.0.0.1:8771"
+
+[clef]
+launcher = "../MezzoSopranoClef/launcher/build/libs/mezzosopranoclef-launcher-0.1.0.jar"
+server = "127.0.0.1:25566"
+auth = "offline"
+base_port = 9741
+max_heap = "1024m"
+
+[players]
+owners = ["Solenopsisbot"]
+
+[[agents]]
+name = "Tester"
+persona = "personas/clay.md"
