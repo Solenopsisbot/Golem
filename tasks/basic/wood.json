@@ -1,0 +1,9 @@
+{
+  "name": "wood",
+  "description": "Gather logs from nearby trees with bare hands.",
+  "goal": "Collect 6 logs of any kind. Say 'done' in chat when you have them.",
+  "timeout_s": 300,
+  "setup": { "time": "day", "weather": "clear", "clear_inventory": true },
+  "success": [ { "type": "inventory", "item": "*_log", "count": 6 } ],
+  "tags": ["basic"]
+}

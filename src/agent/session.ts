@@ -81,6 +81,12 @@ export class AgentSession {
     return s;
   }
 
+  /** Subscribe to this agent's bridge events (what the SSE stream carries). */
+  subscribeEvents(listener: (ev: BridgeEvent) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
   private onMindExit(): void {
     if (this.stopping) return;
     this.mindRestarts++;

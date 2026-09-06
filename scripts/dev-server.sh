@@ -52,6 +52,14 @@ fi
 # Keep the difficulty line in sync with MC_DIFFICULTY even on an existing properties file.
 sed -i '' "s/^difficulty=.*/difficulty=$DIFFICULTY/" "$DIR/server.properties"
 
+# RCON for the eval runner (world resets without op-ing the bot). Password lives next to the world.
+RCON_PORT="${MC_RCON_PORT:-25576}"
+[[ -f "$DIR/rcon.password" ]] || python3 -c "import secrets;print(secrets.token_urlsafe(18))" > "$DIR/rcon.password"
+RCON_PASS="$(cat "$DIR/rcon.password")"
+grep -q '^enable-rcon=' "$DIR/server.properties" && sed -i '' "s/^enable-rcon=.*/enable-rcon=true/" "$DIR/server.properties" || echo "enable-rcon=true" >> "$DIR/server.properties"
+grep -q '^rcon.port=' "$DIR/server.properties" && sed -i '' "s/^rcon.port=.*/rcon.port=$RCON_PORT/" "$DIR/server.properties" || echo "rcon.port=$RCON_PORT" >> "$DIR/server.properties"
+grep -q '^rcon.password=' "$DIR/server.properties" && sed -i '' "s|^rcon.password=.*|rcon.password=$RCON_PASS|" "$DIR/server.properties" || echo "rcon.password=$RCON_PASS" >> "$DIR/server.properties"
+
 cd "$DIR"
 if [[ "${1:-}" == "--bg" ]]; then
   nohup "$JAVA" -Xmx2G -jar "$JAR" nogui > "$DIR/server.log" 2>&1 &

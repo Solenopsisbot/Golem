@@ -1,0 +1,23 @@
+{
+  "name": "crafting_table",
+  "description": "From logs to a placed crafting table (self-reported; a block predicate needs a fixed spot).",
+  "goal": "Make a crafting table and place it on the ground next to you. Say 'done' when it's placed.",
+  "timeout_s": 300,
+  "setup": {
+    "time": "day",
+    "clear_inventory": true,
+    "give": [
+      "oak_log 4"
+    ]
+  },
+  "success": [
+    {
+      "type": "said",
+      "includes": "done"
+    }
+  ],
+  "tags": [
+    "basic",
+    "craft"
+  ]
+}

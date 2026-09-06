@@ -1,0 +1,9 @@
+{
+  "name": "stone_pickaxe",
+  "description": "Wood to stone tools: planks, sticks, table, wooden pickaxe, cobblestone, stone pickaxe.",
+  "goal": "Make a stone pickaxe. Say 'done' when you're holding one.",
+  "timeout_s": 600,
+  "setup": { "time": "day", "clear_inventory": true, "give": ["oak_log 6"] },
+  "success": [ { "type": "inventory", "item": "stone_pickaxe", "count": 1 } ],
+  "tags": ["basic", "craft"]
+}

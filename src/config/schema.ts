@@ -148,7 +148,15 @@ export const AgentEntry = z.object({
   bridge: BridgeSection.partial().optional(),
 });
 
+export const EvalSection = z.object({
+  rcon: z.string().default("127.0.0.1:25576"),
+  /** File holding the RCON password (default: the dev server's). */
+  rcon_password_file: z.string().default("./data/server/rcon.password"),
+  results_dir: z.string().default("./data/eval"),
+});
+
 export const GolemConfigSchema = z.object({
+  eval: EvalSection.prefault({}),
   fleet: FleetSection.prefault({}),
   clef: ClefSection.prefault({}),
   mind: MindSection.prefault({}),

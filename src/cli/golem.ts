@@ -8,6 +8,7 @@
 //   golem met <agent|all>      stop everything
 //   golem talk <agent>         chat with a running agent as its first owner (via the bridge)
 //   golem prompt <agent> "text"   push one line into a running agent's inbox
+//   golem eval <task.json|dir> [agent] [--label name] [--keep-session]   run eval tasks, record results in data/eval/
 //   golem gen-types            regenerate src/body/schema.gen.ts from Clef's schema.json
 import { spawnSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
@@ -17,6 +18,8 @@ import { AgentSession } from "../agent/session.ts";
 import { GolemHttpHost } from "../mcp/server.ts";
 import { ensureTokens } from "../config/load.ts";
 import { ShemEngine } from "../shem/engine.ts";
+import { EvalRunner } from "../eval/runner.ts";
+import { loadTasks } from "../eval/task.ts";
 import readline from "node:readline/promises";
 import { agentNames, loadConfig, resolveAgent } from "../config/load.ts";
 import { bodyLogPath, isBodyRunning, killBody, spawnBody, superviseBody, type Supervisor } from "../fleet/body.ts";
@@ -26,7 +29,7 @@ import { shellLoop } from "./shell.ts";
 const log = makeLog("golem");
 
 function usage(): never {
-  console.error(`usage: golem <up|body|attach|shell|status|met|talk|prompt|gen-types> [agent] [-c "cmds"] [--config path] [--no-orient]`);
+  console.error(`usage: golem <up|body|attach|shell|status|met|talk|prompt|eval|gen-types> [agent|task] [-c "cmds"] [--config path] [--no-orient] [--label x] [--keep-session]`);
   process.exit(2);
 }
 
@@ -35,15 +38,19 @@ function parseArgs(argv: string[]) {
   let config: string | undefined;
   let oneShot: string | undefined;
   let noOrient = false;
+  let label: string | undefined;
+  let keepSession = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     if (a === "--config") config = argv[++i];
     else if (a === "-c") oneShot = argv[++i];
     else if (a === "--no-orient") noOrient = true;
+    else if (a === "--label") label = argv[++i];
+    else if (a === "--keep-session") keepSession = true;
     else if (a.startsWith("-")) usage();
     else positional.push(a);
   }
-  return { positional, config, oneShot, noOrient };
+  return { positional, config, oneShot, noOrient, label, keepSession };
 }
 
 async function withRuntime(agentName: string, configPath: string | undefined, fn: (rt: AgentRuntime) => Promise<void>, opts: { waitForBodyMs?: number } = {}): Promise<void> {
@@ -60,7 +67,7 @@ async function withRuntime(agentName: string, configPath: string | undefined, fn
 }
 
 async function main(): Promise<void> {
-  const { positional, config, oneShot, noOrient } = parseArgs(process.argv.slice(2));
+  const { positional, config, oneShot, noOrient, label, keepSession } = parseArgs(process.argv.slice(2));
   const [cmd, ...rest] = positional;
   if (!cmd) usage();
 
@@ -119,6 +126,32 @@ async function main(): Promise<void> {
       log.info(`bridge: http://${host.host}:${host.port}/agents/<name>/{inbox,say,status,events} (bearer token in data/<name>/tokens.json)`);
       for (const s of sessions) log.info(`dashboard: http://${host.host}:${host.port}/agents/${encodeURIComponent(s.agent.name)}/dash?token=${ensureTokens(s.agent).mcp}`);
       await new Promise(() => {}); // run until signalled
+      return;
+    }
+    case "eval": {
+      const target = rest[0]; if (!target) usage();
+      const loaded = loadConfig(config);
+      const name = rest[1] ?? agentNames(loaded)[0];
+      if (!name) { log.error("no agents in golem.toml"); process.exit(1); }
+      const tasks = loadTasks(target);
+      log.info(`eval: ${tasks.length} task(s) with ${name}${label ? ` [${label}]` : ""}`);
+      const host = new GolemHttpHost(loaded.config.fleet.mcp_bind);
+      await host.start();
+      const agent = resolveAgent(loaded, name);
+      const sup = !agent.body.attach && !isBodyRunning(agent) ? superviseBody(agent) : undefined;
+      const runner = new EvalRunner({ agentName: name, loaded, host, fresh: !keepSession, label });
+      const results = [];
+      const shutdown = async () => { runner.close(); sup?.stop(); await host.stop().catch(() => {}); process.exit(0); };
+      process.once("SIGINT", shutdown);
+      for (const { path, task } of tasks) {
+        log.info(`--- ${task.name}: ${task.description || task.goal}`);
+        const r = await runner.run(task);
+        r.path = path;
+        results.push(r);
+      }
+      console.log("\n" + results.map((r) => `${r.status.padEnd(8)} ${r.name.padEnd(18)} ${r.seconds.toFixed(0).padStart(5)}s ${String(r.turns).padStart(3)} turns ${String(r.toolCalls).padStart(4)} calls ${String(r.deaths).padStart(2)} deaths  ${r.detail}`).join("\n"));
+      console.log(`\n${results.filter((r) => r.status === "success").length}/${results.length} succeeded`);
+      await shutdown();
       return;
     }
     case "talk":

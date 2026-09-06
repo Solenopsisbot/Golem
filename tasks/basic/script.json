@@ -1,0 +1,9 @@
+{
+  "name": "script",
+  "description": "Write and run a Shem script on request.",
+  "goal": "Write a Shem script at shem/count_trees.shem with a script count_logs(radius: int = 32) that returns how many log blocks find_blocks sees within the radius, check it, run it, and say the number in chat as 'logs: N'.",
+  "timeout_s": 300,
+  "setup": { "time": "day", "clear_inventory": false },
+  "success": [ { "type": "script_exists", "name": "count_trees" }, { "type": "said", "includes": "logs:" } ],
+  "tags": ["basic", "shem"]
+}
