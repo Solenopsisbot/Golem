@@ -3,8 +3,16 @@
   "version": "0.0.1",
   "private": true,
   "description": "Embodied-agent framework for Minecraft: MezzoSopranoClef body, ACP mind, Shem scripts.",
-  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Solenopsisbot/Golem.git"
+  },
+  "homepage": "https://github.com/Solenopsisbot/Golem#readme",
+  "bugs": {
+    "url": "https://github.com/Solenopsisbot/Golem/issues"
+  },
   "license": "MIT",
+  "type": "module",
   "engines": {
     "node": ">=24"
   },
