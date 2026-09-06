@@ -75,6 +75,19 @@ Tools are grouped and named with a short prefix so they sort together in the age
 
 | Tool | Args | What it does |
 |---|---|---|
+| `shem_check` | path, source | Diagnostics for a script file without running it (path under your workspace, or lib/<name>). You don't need this before shem_run: shem_run checks first and refuses to run a file with errors, returning the same diagnostics. |
+| `shem_run` | path, script, params, priority, interrupt, background, timeout_s | Check and run a script from a file in one call. `path` is the file (shem/mine.shem, or lib/wood for the standard library); `script` is the script name inside it (required when the file has several). Runs the checker first and returns its diagnostics instead of running if there are errors. With background=true Golem tells you in your inbox when the run ends; don't poll it. |
+| `shem_eval` | save, code, params, timeout_s, background | Run a Shem snippet (statements, or a whole file with script declarations) in one call. Pass `save` (e.g. shem/harvest.shem) to also keep it as a script: the snippet is checked, written to that file, and the saved file is run, so a new script costs one call instead of write + check + run. Bare statements are saved wrapped as `script main()`. Put say/dm/block_at/inventory checks inside the snippet rather than making separate calls. |
+| `shem_status` | run | Status and trace tail of a run. Rarely needed: foreground runs return their result, background runs report into your inbox when they end. |
+| `shem_wait` | run, timeout_s | Wait for a background run to end (bounded). Prefer letting it report into your inbox and doing something else meanwhile. |
+| `shem_cancel` | run | Cancel a run, or every active run when omitted. |
+| `shem_runs` |  | Active and recent runs. |
+| `shem_doc` | name | Documentation for a Shem function, getter, event, or library script by name. |
+
+## Scripts (Shem)
+
+| Tool | Args | What it does |
+|---|---|---|
 | `shem_check` | path, source | Check a Shem script file (path under your workspace, or lib/<name>) without running it: syntax, unknown names, arity, unknown block/item ids, bare numbers where durations go. |
 | `shem_run` | path, script, params, priority, interrupt, background, timeout_s | Run a script from a file. `path` is the file (shem/mine.shem, or lib/wood for the standard library); `script` is the script name inside it (required when the file has several, e.g. lib/craft has make_planks, make_sticks, table_here, wooden_tools); `params` are the script's own parameters as JSON. Blocks until it ends or timeout_s passes (the run keeps going; use shem_status/shem_wait). background: true returns immediately. interrupt: true preempts a lower-priority foreground run. |
 | `shem_eval` | code, params, timeout_s, background | Run a Shem snippet (statements, or a whole file with script declarations) without saving it. Good for one-off actions and for trying a script before writing it. |

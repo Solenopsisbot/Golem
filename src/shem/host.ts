@@ -125,6 +125,7 @@ export function makeShemHost(rt: AgentRuntime): Host {
   def("stop", async (p) => { await p.stop(); return null; });
   def("flee", async (p, a, n) => { const from = arg(a, n, 0, "from") ?? null; const pts = (Array.isArray(from) ? from : [from]).map((v) => toVec(v).plain); const r = await p.flee(pts, toNum(arg(a, n, 1, "dist") ?? 16)); return { pos: new Vec3(r.pos.x, r.pos.y, r.pos.z, false) }; });
   def("wander", async (p, a, n) => { const r = toNum(arg(a, n, 0, "radius") ?? 12); const m = rt.mirror.pos; const ang = Math.random() * Math.PI * 2; const res = await p.gotoXZ(m.x + Math.cos(ang) * r, m.z + Math.sin(ang) * r, { reach: 2, timeoutMs: 30_000 }); return { pos: new Vec3(res.pos.x, res.pos.y, res.pos.z, false) }; });
+  def("surface", async (p, a, n) => { const d = arg(a, n, 0, "timeout"); const r = await p.surface({ timeoutMs: d == null ? undefined : toDur(d) }); return r.y; });
   def("explore", async (p, a, n) => { const d = arg(a, n, 0, "for"); await p.explore(d == null ? undefined : toDur(d)); return null; });
   def("goto_surface", async (p) => { const r = await p.surface(); return { y: r.y, rose: r.rose }; });
 

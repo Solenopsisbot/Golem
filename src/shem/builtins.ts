@@ -71,6 +71,7 @@ export const BUILTINS: BuiltinSpec[] = [
   { name: "stop", params: [], returns: "none", doc: "Stop moving, mining, pathing, using.", blocking: true },
   { name: "flee", params: [p("from", "any"), p("dist", "float", "16")], returns: "record", doc: "Move away from a pos, entity or list of them.", blocking: true },
   { name: "wander", params: [p("radius", "int", "12")], returns: "record", doc: "Walk to a random nearby XZ.", blocking: true },
+  { name: "surface", params: [p("timeout", "dur", "none")], returns: "int", doc: "Dig and climb to open sky from wherever you are (buried, in a cave). Returns the y you ended at. Fails if it can't get there in time.", blocking: true },
   { name: "explore", params: [p("for", "dur", "none")], returns: "none", doc: "Baritone explore. explore(for: 2m) blocks that long then stops; without `for` it returns at once and runs until stop().", blocking: true },
   { name: "goto_surface", params: [], returns: "record", doc: "Climb to the surface: .y .rose. Fails with `unreachable` when sealed in.", blocking: true },
   { name: "dig_down", params: [p("n", "int")], returns: "none", doc: "Dig straight down n blocks, checking for lava and air below.", blocking: true, stub: true },
