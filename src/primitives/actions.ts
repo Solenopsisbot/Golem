@@ -265,26 +265,75 @@ export async function closeScreen(ctx: Ctx): Promise<void> {
   await until(() => !ctx.mirror.screen, { timeoutMs: 1500, intervalMs: 100, what: "close screen", token: ctx.token }).catch(() => { ctx.mirror.screen = null; });
 }
 
-/** Shift-click all matching items INTO the open container. */
+/** Shift-click all matching items INTO the open container (loops in case the body moves one stack per call). */
 export async function deposit(ctx: Ctx, item: string): Promise<{ moved: number }> {
   if (!ctx.mirror.screen) throw new GolemError("blocked", "no container open");
-  try { const r = (await ctx.body.call("deposit", { item: fullId(item) })) as { deposited: number }; await sleep(150, ctx.token); await reindexOpen(ctx); return { moved: r.deposited }; }
-  catch (e) { throw fromClef(e, `deposit ${item}`); }
+  let moved = 0;
+  try {
+    for (let i = 0; i < 12; i++) {
+      const r = (await ctx.body.call("deposit", { item: fullId(item) })) as { deposited: number };
+      if (!r.deposited) break;
+      moved += r.deposited;
+      await sleep(120, ctx.token);
+    }
+    await reindexOpen(ctx);
+    return { moved };
+  } catch (e) { throw fromClef(e, `deposit ${item}`); }
 }
-/** Shift-click all matching items OUT of the open container. */
+/** Shift-click all matching items OUT of the open container (the body moves one stack per call; this loops). */
 export async function withdraw(ctx: Ctx, item: string): Promise<{ moved: number }> {
   if (!ctx.mirror.screen) throw new GolemError("blocked", "no container open");
-  try { const r = (await ctx.body.call("withdraw", { item: fullId(item) })) as { withdrew: number }; await sleep(150, ctx.token); await reindexOpen(ctx); return { moved: r.withdrew }; }
-  catch (e) { throw fromClef(e, `withdraw ${item}`); }
+  let moved = 0;
+  try {
+    for (let i = 0; i < 12; i++) {
+      const r = (await ctx.body.call("withdraw", { item: fullId(item) })) as { withdrew: number };
+      if (!r.withdrew) break;
+      moved += r.withdrew;
+      await sleep(120, ctx.token);
+    }
+    await reindexOpen(ctx);
+    return { moved };
+  } catch (e) { throw fromClef(e, `withdraw ${item}`); }
 }
 
-/** Craft via the body's recipe-book command (CLEF-CHANGES #2). Grid-click fallback is not written yet. */
+/**
+ * Craft via the body's recipe-book command. If the recipe needs a 3x3 grid and no crafting screen
+ * is open, finds a crafting table within 8 blocks (or places one from the inventory), opens it,
+ * crafts, and closes it again.
+ */
 export async function craft(ctx: Ctx, item: string, count = 1): Promise<CraftResult> {
   if (!ctx.body.caps.has("craft")) {
     throw new GolemError("unsupported", "the body has no craft command yet (docs/CLEF-CHANGES.md #2)");
   }
-  try { return (await ctx.body.call("craft", { item: fullId(item), count })) as CraftResult; }
-  catch (e) { throw fromClef(e, `craft ${item}`); }
+  const id = fullId(item);
+  const doCraft = async () => { try { return (await ctx.body.call("craft", { item: id, count })) as CraftResult; } catch (e) { throw fromClef(e, `craft ${item}`); } };
+  if (ctx.mirror.screen) return doCraft();
+  let needsTable = false;
+  if (ctx.body.caps.has("recipes")) {
+    try {
+      const rs = (await ctx.body.call("recipes", { item: id })) as RecipeResult[];
+      needsTable = rs.length > 0 && rs.every((r) => r.needsTable);
+    } catch { /* fall through and just try */ }
+  }
+  if (!needsTable) {
+    try { return await doCraft(); }
+    catch (e) { if (!(e instanceof GolemError) || !/2x2|table/i.test(e.message)) throw e; }
+  }
+  return ctx.activity.run(`craft ${shortId(id)} at a table`, async () => {
+    let table: Pos | undefined;
+    if (ctx.body.caps.has("findBlocks")) {
+      const near = await findBlocks(ctx, ["crafting_table"], { radius: 8, max: 1 }).catch(() => []);
+      if (near[0]) table = { x: near[0].x, y: near[0].y, z: near[0].z };
+    }
+    if (!table) {
+      const inv = await inventory(ctx);
+      if (!inv.has("crafting_table")) throw new GolemError("missing_item", `${shortId(id)} needs a crafting table and there is none within 8 blocks or in the inventory`);
+      table = await placeNearby(ctx, "crafting_table");
+    }
+    await openContainer(ctx, table);
+    try { return await doCraft(); }
+    finally { await closeScreen(ctx); }
+  });
 }
 
 /** Recipe tree for an item (protocol 2 `recipes`). */

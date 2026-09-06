@@ -93,7 +93,15 @@ export class AgentRuntime {
     // A restarted body comes back on the title screen: get it into the world again.
     this.body.on("_reconnected", () => { if (!this.stopping) void this.ensureInWorld().catch((e) => this.log.error(`rejoin after reconnect failed: ${(e as Error).message}`)); });
     await this.ensureInWorld();
+    await this.tuneBaritone();
     this.reflexes.start();
+  }
+
+  /** Baritone defaults that hurt a survival bot: without allowInventory it mines with whatever is in hand. */
+  private async tuneBaritone(): Promise<void> {
+    for (const setting of ["allowInventory true", "mobAvoidanceRadius 6"]) {
+      try { await this.body.call("baritone", { command: `set ${setting}` }); } catch (e) { this.log.debug(`baritone set ${setting}: ${(e as Error).message}`); }
+    }
   }
 
   /**

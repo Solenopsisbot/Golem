@@ -154,7 +154,10 @@ Everything Golem touched works: `findBlocks`, `mine {wait}` (returns `{broken, t
 - `nav.check` is a walk-only A* that exhausted at 20001 nodes and said `reachable: false` for a goal Baritone then reached. Fine as a hint; the name suggests more than it is. Maybe `nav.estimate`.
 - `craftable` returned nothing while holding 4 oak planks (crafting table and sticks were craftable). Possibly the recipe-book unlock hadn't arrived yet; worth a look.
 - `chatHistory` returns `{lines:[...]}` with `kind: "system"` lines like "Clay was shot by Skeleton"; the schema doesn't say so. Golem accepts either shape.
-- `status.screen` still reports `class_434` on the launcher build (#17).
+- `status.screen` is readable now (`title`, `none`); thanks.
+- `craft` only knows recipes the server has *unlocked* in the recipe book ("no known recipe produces minecraft:iron_pickaxe" while the ingots were still in the furnace). Crafting by recipe id from the registry would remove that dependency.
+- Container slot `item` strings carry the count (`minecraft:coal x7`); a separate `count` field already exists, so the suffix is just a trap. Golem strips it.
+- `withdraw`/`deposit` move one stack slot per call; Golem loops, but a `{all:true}` would save round trips.
 
 ## Conventions to keep
 
