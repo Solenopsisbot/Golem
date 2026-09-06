@@ -2,6 +2,8 @@
 // and exposes the operations the MCP tools and the shell use.
 import type { AgentRuntime } from "../agent/runtime.ts";
 import { GolemError } from "../primitives/errors.ts";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { BUILTINS, BUILTIN_BY_NAME, EVENTS, GETTERS, GETTER_BY_NAME, signature } from "./builtins.ts";
 import { formatDiagnostics, type Diagnostic } from "./checker.ts";
 import { makeRegistry, makeShemHost } from "./host.ts";
@@ -27,6 +29,17 @@ export class ShemEngine {
     this.interpreter = new Interpreter(makeShemHost(rt));
     this.runs = new RunManager(this.interpreter, rt.agent.workspaceDir);
     this.registry = makeRegistry(rt);
+  }
+
+  /** Called after a tool saves a script (the session regenerates the orientation index). */
+  onSaved: ((rel: string) => void) | undefined;
+
+  /** Write a script file into the workspace; the library reloads it by mtime on the next run. */
+  saveScript(workspaceDir: string, rel: string, src: string): void {
+    const path = resolve(workspaceDir, rel);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, src);
+    try { this.onSaved?.(rel); } catch { /* orientation regen is best-effort */ }
   }
 
   /** Check a file (path or lib ref). Returns diagnostics and a formatted summary. */

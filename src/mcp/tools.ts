@@ -29,6 +29,19 @@ const ok = (text: string): ToolResult => ({ text });
 
 function def<S extends z.ZodRawShape>(d: ToolDef<S>): ToolDef<z.ZodRawShape> { return d as unknown as ToolDef<z.ZodRawShape>; }
 
+
+/** Where a tool-saved script may go: under shem/, one file, .shem, no path tricks. */
+export function saveScriptPath(p: string): string {
+  const rel = p.replace(/^\.\//, "").replace(/^\/+/, "");
+  if (!/^shem\/[A-Za-z0-9_\-]+(\/[A-Za-z0-9_\-]+)*\.shem$/.test(rel) || rel.startsWith("shem/lib/")) throw new GolemError("policy", `save must be a path like shem/name.shem (not under shem/lib/), got ${p}`);
+  return rel;
+}
+/** Bare statements become a file with one script; declarations are kept as they are. */
+export function wrapAsScript(code: string): string {
+  const src = code.replace(/\r\n/g, "\n");
+  if (/^\s*(script|reflex|use)\b/m.test(src)) return src.endsWith("\n") ? src : src + "\n";
+  return `script main() {\n${src.split("\n").map((l) => (l.trim() ? "  " + l : l)).join("\n")}\n}\n`;
+}
 export const TOOLS: ToolDef[] = [
   // ---- perception ----------------------------------------------------------------
   def({ name: "status", description: "Where you are, health, food, time, held item, current activity, reflex states.", input: {},
@@ -47,78 +60,30 @@ export const TOOLS: ToolDef[] = [
     async run(a, { p }) { const b = await p.blockAt(toPos(a)); return ok(`${b.short} at ${fmtPos(b.pos)}${b.air ? " (air)" : b.liquid ? " (liquid)" : ""}`); } }),
   def({ name: "inventory", description: "Your inventory, armor, held item.", input: {},
     async run(_a, { p }) { return ok((await p.inventory()).describe()); } }),
-  def({ name: "container", description: "Contents of the container you have open (or villager trades).", input: {},
-    async run(_a, { p }) { const c = await p.container(); const items = c.slots.filter((s) => s.item && s.item !== "empty" && s.item !== "minecraft:air"); return ok(`${c.handler}: ${items.map((s) => `[${s.slot}] ${s.item.replace("minecraft:", "").replace(/\s+x\d+$/, "")} x${s.count}`).join(", ") || "empty"}${c.trades?.length ? `\ntrades: ${JSON.stringify(c.trades)}` : ""}`); } }),
-  def({ name: "craftable", description: "What you can craft right now with what you carry.", input: {},
-    async run(_a, { p }) { const c = await p.craftable(); return ok(c.length ? c.map((x) => `${x.item.replace("minecraft:", "")} x${x.count}`).join(", ") : "nothing craftable with the current inventory"); } }),
-  def({ name: "recipe", description: "Recipes that produce an item: ingredients, counts, whether a crafting table is needed.", input: { item: z.string() },
-    async run(a, { p }) { return ok(JSON.stringify(await p.recipes(a.item))); } }),
   def({ name: "players", description: "Who is online.", input: {},
     async run(_a, { p }) { return ok((await p.players()).map((x) => x.name).join(", ") || "nobody"); } }),
-  def({ name: "chat_history", description: "Recent chat lines you've seen.", input: { limit: z.number().int().min(1).max(100).default(20) },
-    async run(a, { p }) { const h = await p.chatHistory(a.limit); return ok(h.map((l) => `${l.sender ? l.sender + ": " : ""}${l.text}`).join("\n") || "no chat yet"); } }),
-  def({ name: "target", description: "What your crosshair is on.", input: {},
-    async run(_a, { p }) { return ok(JSON.stringify(await p.target())); } }),
 
   // ---- movement -------------------------------------------------------------------
   def({ name: "goto", description: "Walk to a block position (Baritone pathing). Blocks until you arrive within `reach` blocks or fail. Use reach 2-3 for solid targets.", input: { ...posShape, reach: z.number().int().min(1).max(8).default(1), timeout_s: z.number().min(5).max(600).default(60) },
     async run(a, { p }) { const r = await p.goto(toPos(a), { reach: a.reach, timeoutMs: a.timeout_s * 1000 }); return ok(`arrived ${fmtPos(r.pos)} (${r.distance.toFixed(1)} from goal) in ${(r.ms / 1000).toFixed(1)}s`); } }),
-  def({ name: "goto_nearest", description: "Walk to the nearest block of a kind (Baritone scans loaded chunks).", input: { kind: z.string(), timeout_s: z.number().min(5).max(600).default(90) },
-    async run(a, { p }) { const r = await p.gotoNearestBlock(a.kind, { timeoutMs: a.timeout_s * 1000 }); return ok(`next to ${a.kind} at ${fmtPos(r.pos)} after ${(r.ms / 1000).toFixed(1)}s`); } }),
-  def({ name: "goto_player", description: "Walk to a player.", input: { player: z.string(), reach: z.number().int().min(1).max(8).default(2) },
-    async run(a, { p }) { const e = (await p.entities({ radius: 64, kinds: ["player"] })).find((x) => x.name === a.player); if (!e) throw new GolemError("not_found", `${a.player} is not nearby`); const r = await p.goto({ x: Math.floor(e.x), y: Math.floor(e.y), z: Math.floor(e.z) }, { reach: a.reach }); return ok(`reached ${a.player} at ${fmtPos(r.pos)}`); } }),
-  def({ name: "follow", description: "Follow a player until `stop`. Returns immediately.", input: { player: z.string(), distance: z.number().min(1).max(10).default(3) },
-    async run(a, { p }) { await p.follow({ player: a.player }, a.distance); return ok(`following ${a.player}`); } }),
   def({ name: "stop", description: "Stop moving, mining, pathing and item use.", input: {},
     async run(_a, { p }) { await p.stop(); return ok("stopped"); } }),
-  def({ name: "look_at", description: "Turn your head toward a block position or an entity id.", input: { x: z.number().optional(), y: z.number().optional(), z: z.number().optional(), entity_id: z.number().int().optional() },
-    async run(a, { p }) { const r = a.entity_id != null ? await p.lookAt({ entityId: a.entity_id }) : await p.lookAt({ x: a.x ?? 0, y: a.y ?? 0, z: a.z ?? 0 }); return ok(`looking yaw ${r.yaw.toFixed(0)} pitch ${r.pitch.toFixed(0)}`); } }),
-  def({ name: "explore", description: "Wander into unexplored terrain. With for_s it blocks that long and stops; without, it returns at once and runs until `stop`.", input: { for_s: z.number().min(5).max(900).optional() },
-    async run(a, { p }) { await p.explore(a.for_s ? a.for_s * 1000 : undefined); return ok(a.for_s ? `explored for ${a.for_s}s` : "exploring (stop to end)"); } }),
-  def({ name: "surface", description: "Climb to the surface. Fails if you're sealed in (open a door or dig first).", input: {},
-    async run(_a, { p }) { const r = await p.surface(); return ok(`on the surface at y=${r.y.toFixed(0)} (rose ${r.rose.toFixed(0)})`); } }),
 
   // ---- actions --------------------------------------------------------------------
   def({ name: "mine", description: "Break one block at a position (walks there, picks the best tool, collects the drop).", input: posShape,
     async run(a, { p }) { const r = await p.mine(toPos(a)); return ok(r.broken ? `broke ${r.block} in ${(r.ms / 1000).toFixed(1)}s` : `${fmtPos(toPos(a))} was already air`); } }),
-  def({ name: "mine_all", description: "Baritone mines a block kind until you've collected `count` of the drop. Good for common blocks; for ore you can see, find_blocks + mine (or a shem_eval loop) is faster and won't wander off.", input: { kind: z.string(), count: z.number().int().min(1).max(256).default(8), timeout_s: z.number().min(10).max(1800).default(300) },
-    async run(a, { p }) { const r = await p.mineAll(a.kind, a.count, { timeoutMs: a.timeout_s * 1000 }); return ok(`collected ${r.got} ${r.item} in ${(r.ms / 1000).toFixed(0)}s`); } }),
-  def({ name: "place", description: "Place an item from your inventory so it occupies a position.", input: { item: z.string(), ...posShape },
-    async run(a, { p }) { await p.place(a.item, toPos(a)); return ok(`placed ${a.item} at ${fmtPos(toPos(a))}`); } }),
   def({ name: "use_on", description: "Right-click a block (door, lever, bed, chest...) or an entity id with what you hold.", input: { x: z.number().int().optional(), y: z.number().int().optional(), z: z.number().int().optional(), entity_id: z.number().int().optional() },
     async run(a, { p }) { if (a.entity_id != null) { await p.interactEntity(a.entity_id); return ok(`used on #${a.entity_id}`); } await p.useOnBlock({ x: a.x ?? 0, y: a.y ?? 0, z: a.z ?? 0 }); return ok("used"); } }),
-  def({ name: "attack", description: "Fight an entity by id until it's gone or the timeout passes (walks into reach, picks a weapon).", input: { entity_id: z.number().int(), timeout_s: z.number().min(3).max(120).default(30) },
-    async run(a, { p }) { const r = await p.attack(a.entity_id, { timeoutMs: a.timeout_s * 1000 }); return ok(`${r.killed ? "killed" : "stopped"} after ${r.hits} hits`); } }),
   def({ name: "equip", description: "Equip armor, a shield, or move a tool to hand.", input: { item: z.string() },
     async run(a, { p }) { const r = await p.equip(a.item); return ok(r.slot === null ? `wearing ${a.item}` : `holding ${r.held.replace("minecraft:", "")} (hotbar ${r.slot})`); } }),
   def({ name: "eat", description: "Eat a named food, or the best food you carry.", input: { item: z.string().optional() },
     async run(a, { p }) { const r = await p.eat(a.item); return ok(r.ate ? `ate ${r.ate}, food now ${r.food}` : "not hungry"); } }),
-  def({ name: "drop", description: "Drop items (count omitted = whole stacks).", input: { item: z.string(), count: z.number().int().min(1).optional() },
-    async run(a, { p }) { const r = await p.drop(a.item, a.count); return ok(`dropped ${r.dropped}`); } }),
   def({ name: "craft", description: "Craft an item (uses a crafting table if one is open or needed and nearby).", input: { item: z.string(), count: z.number().int().min(1).max(64).default(1) },
     async run(a, { p }) { const r = await p.craft(a.item, a.count); return ok(`crafted ${r.crafted} ${r.item.replace("minecraft:", "")}`); } }),
-  def({ name: "open", description: "Open a container block (chest, furnace, crafting table...) and read it.", input: posShape,
-    async run(a, { p }) { const c = await p.openContainer(toPos(a)); const items = c.slots.filter((s) => s.item && s.item !== "empty" && s.item !== "minecraft:air"); return ok(`${c.handler}: ${items.map((s) => `[${s.slot}] ${s.item.replace("minecraft:", "").replace(/\s+x\d+$/, "")} x${s.count}`).join(", ") || "empty"}`); } }),
-  def({ name: "close", description: "Close the open container/screen.", input: {},
-    async run(_a, { p }) { await p.closeScreen(); return ok("closed"); } }),
-  def({ name: "deposit", description: "Move all of an item from your inventory into the open container.", input: { item: z.string() },
-    async run(a, { p }) { const r = await p.deposit(a.item); return ok(`deposited ${r.moved}`); } }),
-  def({ name: "withdraw", description: "Move all of an item from the open container into your inventory.", input: { item: z.string() },
-    async run(a, { p }) { const r = await p.withdraw(a.item); return ok(`withdrew ${r.moved}`); } }),
-  def({ name: "smelt", description: "Smelt items in a furnace (one within 8 blocks, or placed from your inventory). Uses coal/charcoal/planks/logs you carry as fuel. Waits for the output and takes it.", input: { item: z.string(), count: z.number().int().min(1).max(64).default(1), fuel: z.string().optional() },
-    async run(a, { p }) { const r = await p.smelt(a.item, a.count, { fuel: a.fuel }); return ok(`smelted ${r.smelted} ${r.output}`); } }),
-  def({ name: "sleep", description: "Sleep in a bed within 24 blocks (or place one you carry). Only works at night; the night skips if every player sleeps.", input: {},
-    async run(_a, { p }) { const r = await p.sleepInBed(); return ok(r.ok ? `slept${r.bed ? ` at ${fmtPos(r.bed)}` : ""}` : `couldn't sleep: ${r.reason ?? "refused"}`); } }),
-  def({ name: "collect_drops", description: "Walk over nearby dropped items.", input: { radius: z.number().min(2).max(16).default(6) },
-    async run(a, { p }) { const r = await p.collectDrops(a.radius); return ok(`visited ${r.visited} drops`); } }),
-  def({ name: "baritone", description: "Run a raw Baritone command (e.g. \"farm\", \"tunnel\", \"sel pos1 ...\"). Expert use.", input: { command: z.string() },
-    async run(a, { p }) { await p.baritone(a.command); return ok(`baritone: ${a.command}`); } }),
 
   // ---- comms ----------------------------------------------------------------------
   def({ name: "say", description: "Say one line in game chat. Short. Rate-limited.", input: { text: z.string().min(1) },
     async run(a, { p }) { const r = await p.say(a.text); return ok(`said: ${r.sent}`); } }),
-  def({ name: "whisper", description: "Private message a player.", input: { player: z.string(), text: z.string().min(1) },
-    async run(a, { p }) { const r = await p.whisper(a.player, a.text); return ok(`whispered to ${a.player}: ${r.sent}`); } }),
   def({ name: "dm", description: "Send a message to another golem in this fleet (see `agents`). Conversations are capped per pair, so say what matters and don't chat for the sake of it.", input: { agent: z.string(), text: z.string().min(1) },
     async run(a, { drive, rt }) { if (!drive.bus) throw new GolemError("unsupported", "no agent bus in this fleet"); const r = drive.bus.send(rt.agent.name, a.agent, a.text); rt.trace.mark("dm", { to: a.agent, text: a.text }); return ok(`sent to ${a.agent}${r.remaining <= 2 ? ` (${r.remaining} messages left before this conversation pauses)` : ""}`); } }),
   def({ name: "agents", description: "The other golems in this fleet and what they're doing.", input: {},
@@ -147,27 +112,40 @@ const needShem = (tc: ToolCtx): ShemEngine => { if (!tc.shem) throw new GolemErr
 const paramsShape = z.record(z.string(), z.any()).optional();
 
 export const SHEM_TOOLS: ToolDef[] = [
-  def({ name: "shem_check", description: "Check a Shem script file (path under your workspace, or lib/<name>) without running it: syntax, unknown names, arity, unknown block/item ids, bare numbers where durations go.", input: { path: z.string().optional(), source: z.string().optional() },
+  def({ name: "shem_check", description: "Diagnostics for a script file without running it (path under your workspace, or lib/<name>). You don't need this before shem_run: shem_run checks first and refuses to run a file with errors, returning the same diagnostics.", input: { path: z.string().optional(), source: z.string().optional() },
     async run(a, tc) { const e = needShem(tc); if (a.source) return ok(e.checkSource(a.source).text); if (!a.path) throw new GolemError("failed", "give path or source"); return ok(e.check(a.path).text); } }),
-  def({ name: "shem_run", description: "Run a script from a file. `path` is the file (shem/mine.shem, or lib/wood for the standard library); `script` is the script name inside it (required when the file has several, e.g. lib/craft has make_planks, make_sticks, table_here, wooden_tools); `params` are the script's own parameters as JSON. Blocks until it ends or timeout_s passes (the run keeps going; use shem_status/shem_wait). background: true returns immediately. interrupt: true preempts a lower-priority foreground run.", input: { path: z.string(), script: z.string().optional(), params: paramsShape, priority: z.number().int().min(0).max(100).default(50), interrupt: z.boolean().default(false), background: z.boolean().default(false), timeout_s: z.number().min(1).max(3600).default(120) },
+  def({ name: "shem_run", description: "Check and run a script from a file in one call. `path` is the file (shem/mine.shem, or lib/wood for the standard library); `script` is the script name inside it (required when the file has several). Runs the checker first and returns its diagnostics instead of running if there are errors. With background=true Golem tells you in your inbox when the run ends; don't poll it.", input: { path: z.string(), script: z.string().optional(), params: paramsShape, priority: z.number().int().min(0).max(100).default(50), interrupt: z.boolean().default(false), background: z.boolean().default(false), timeout_s: z.number().min(1).max(3600).default(120) },
     async run(a, tc) {
       const e = needShem(tc);
       const run = e.run(a.path, a.script, (a.params ?? {}) as Record<string, never>, { priority: a.priority, interrupt: a.interrupt, background: a.background, timeoutMs: Math.max(a.timeout_s, 600) * 1000 });
-      if (a.background) return ok(`started ${run.id} (${run.label}) in the background`);
+      if (a.background) return ok(`started ${run.id} (${run.label}) in the background; you'll get an inbox item when it ends, no need to poll`);
       return ok(await e.wait(run, a.timeout_s * 1000));
     } }),
-  def({ name: "shem_eval", description: "Run a Shem snippet (statements, or a whole file with script declarations) without saving it. Good for one-off actions and for trying a script before writing it.", input: { code: z.string(), params: paramsShape, timeout_s: z.number().min(1).max(3600).default(120), background: z.boolean().default(false) },
-    async run(a, tc) { const e = needShem(tc); const run = e.eval(a.code, (a.params ?? {}) as Record<string, never>, { background: a.background, timeoutMs: Math.max(a.timeout_s, 600) * 1000 }); if (a.background) return ok(`started ${run.id} in the background`); return ok(await e.wait(run, a.timeout_s * 1000)); } }),
-  def({ name: "shem_status", description: "Status and trace tail of a run.", input: { run: z.string() },
+  def({ name: "shem_eval", description: "Run a Shem snippet (statements, or a whole file with script declarations) in one call. Pass `save` (e.g. shem/harvest.shem) to also keep it as a script: the snippet is checked, written to that file, and the saved file is run, so a new script costs one call instead of write + check + run. Bare statements are saved wrapped as `script main()`. Put say/dm/block_at/inventory checks inside the snippet rather than making separate calls.", input: { save: z.string().optional(),  code: z.string(), params: paramsShape, timeout_s: z.number().min(1).max(3600).default(120), background: z.boolean().default(false) },
+    async run(a, tc) {
+      const e = needShem(tc);
+      if (a.save) {
+        const rel = saveScriptPath(a.save);
+        const src = wrapAsScript(a.code);
+        const check = e.checkSource(src);
+        if (check.diagnostics.some((d) => d.severity === "error")) return ok(`not saved: ${check.text}`);
+        e.saveScript(tc.rt.agent.workspaceDir, rel, src);
+        const run = e.run(rel, undefined, (a.params ?? {}) as Record<string, never>, { background: a.background, timeoutMs: Math.max(a.timeout_s, 600) * 1000 });
+        if (a.background) return ok(`saved ${rel}; started ${run.id} in the background; you'll get an inbox item when it ends`);
+        return ok(`saved ${rel}\n${await e.wait(run, a.timeout_s * 1000)}`);
+      }
+      const run = e.eval(a.code, (a.params ?? {}) as Record<string, never>, { background: a.background, timeoutMs: Math.max(a.timeout_s, 600) * 1000 });
+      if (a.background) return ok(`started ${run.id} in the background; you'll get an inbox item when it ends, no need to poll`);
+      return ok(await e.wait(run, a.timeout_s * 1000));
+    } }),
+  def({ name: "shem_status", description: "Status and trace tail of a run. Rarely needed: foreground runs return their result, background runs report into your inbox when they end.", input: { run: z.string() },
     async run(a, tc) { const r = needShem(tc).runs.get(a.run); if (!r) throw new GolemError("not_found", `no run ${a.run}`); return ok(describeRun(r, 30, true)); } }),
-  def({ name: "shem_wait", description: "Wait for a run to end (bounded).", input: { run: z.string(), timeout_s: z.number().min(1).max(3600).default(120) },
+  def({ name: "shem_wait", description: "Wait for a background run to end (bounded). Prefer letting it report into your inbox and doing something else meanwhile.", input: { run: z.string(), timeout_s: z.number().min(1).max(3600).default(120) },
     async run(a, tc) { const e = needShem(tc); const r = e.runs.get(a.run); if (!r) throw new GolemError("not_found", `no run ${a.run}`); return ok(await e.wait(r, a.timeout_s * 1000)); } }),
   def({ name: "shem_cancel", description: "Cancel a run, or every active run when omitted.", input: { run: z.string().optional() },
     async run(a, tc) { const n = needShem(tc).runs.cancel(a.run, "shem_cancel"); return ok(`cancelled ${n} run(s)`); } }),
   def({ name: "shem_runs", description: "Active and recent runs.", input: {},
     async run(_a, tc) { const rs = needShem(tc).runs.list().slice(0, 15); return ok(rs.length ? rs.map((r) => `${r.id} ${r.label} p${r.priority}${r.background ? " bg" : ""}: ${r.status}${r.status === "running" && r.current ? ` (in ${r.current})` : ""}`).join("\n") : "no runs yet"); } }),
-  def({ name: "shem_list", description: "Index of every script you can run: yours under shem/, the standard library under lib/, and reflexes.", input: {},
-    async run(_a, tc) { return ok(needShem(tc).list()); } }),
   def({ name: "shem_doc", description: "Documentation for a Shem function, getter, event, or library script by name.", input: { name: z.string() },
     async run(a, tc) { return ok(needShem(tc).doc(a.name)); } }),
 ];

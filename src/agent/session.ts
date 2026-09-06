@@ -51,6 +51,7 @@ export class AgentSession {
     for (const name of agent.reflexes.on) if (shemReflexes.includes(name)) s.rt.reflexes.enable(name);
     const orient = () => writeOrientation({ agent, tools: toolDocs(), shem: { cheatsheet: shem.cheatsheet(), index: shem.list() } });
     orient();
+    shem.onSaved = (rel) => { s.log.info(`script saved by tool: ${rel}`); orient(); };
     const tokens = ensureTokens(agent);
     const hooks = makeHookSink(agent.name, agent.bridge, s.log.child("hooks"));
     const emit = (ev: { type: string; [k: string]: unknown }) => {
