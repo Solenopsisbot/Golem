@@ -29,6 +29,8 @@ export const TaskSchema = z.object({
     commands: z.array(z.string()).default([]),
     clear_inventory: z.boolean().default(true),
     teleport: Pos.optional(),
+    /** `spreadplayers x z 1 range`: put the bot on safe surface ground within `range` of (x, z). */
+    spread: z.tuple([z.number(), z.number(), z.number()]).optional(),
     time: z.enum(["day", "noon", "night", "midnight"]).optional(),
     weather: z.enum(["clear", "rain", "thunder"]).optional(),
     gamemode: z.enum(["survival", "creative"]).optional(),

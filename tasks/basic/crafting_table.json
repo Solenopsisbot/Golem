@@ -8,6 +8,11 @@
     "clear_inventory": true,
     "give": [
       "oak_log 4"
+    ],
+    "spread": [
+      110,
+      100,
+      40
     ]
   },
   "success": [

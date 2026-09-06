@@ -10,6 +10,11 @@
     "give": [
       "red_bed 1",
       "torch 4"
+    ],
+    "spread": [
+      110,
+      100,
+      40
     ]
   },
   "success": [

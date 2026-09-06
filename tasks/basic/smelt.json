@@ -3,7 +3,29 @@
   "description": "Smelt raw iron with coal in a furnace from the inventory.",
   "goal": "Smelt the raw iron you carry into iron ingots. You have a furnace and coal. Say 'done' when you hold 3 iron ingots.",
   "timeout_s": 420,
-  "setup": { "time": "day", "clear_inventory": true, "give": ["raw_iron 3", "coal 4", "furnace 1"] },
-  "success": [ { "type": "inventory", "item": "iron_ingot", "count": 3 } ],
-  "tags": ["basic", "smelt"]
+  "setup": {
+    "time": "day",
+    "clear_inventory": true,
+    "give": [
+      "raw_iron 3",
+      "coal 4",
+      "furnace 1"
+    ],
+    "spread": [
+      110,
+      100,
+      40
+    ]
+  },
+  "success": [
+    {
+      "type": "inventory",
+      "item": "iron_ingot",
+      "count": 3
+    }
+  ],
+  "tags": [
+    "basic",
+    "smelt"
+  ]
 }

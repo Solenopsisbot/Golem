@@ -43,7 +43,7 @@ bin/golem eval tasks/basic/wood.json --label "opus-act"   # one task, tagged for
 bin/golem eval-report                                     # table of all results, grouped by label
 ```
 
-A task is a JSON file: a `goal` for the mind, a `setup` (RCON world reset: clear, give, teleport, time, weather, gamemode, raw commands), `success` predicates that must all hold at once (inventory with `*` wildcards, block, near, said, alive, script_exists), optional `fail` predicates, a `timeout_s`. Results land in `data/eval/*.json` with turns, tool calls, tokens, deaths and seconds. The runner owns the agent while it runs: stop `golem up` first. The dev server enables RCON on port 25576 with the password in `data/server/rcon.password`.
+A task is a JSON file: a `goal` for the mind, a `setup` (RCON world reset: clear, give, teleport or `spread` onto safe surface ground near a point, time, weather, gamemode, raw commands), `success` predicates that must all hold at once (inventory with `*` wildcards, block, near, said, alive, script_exists), optional `fail` predicates, a `timeout_s`. Results land in `data/eval/*.json` with turns, tool calls, tokens, deaths and seconds. The runner owns the agent while it runs: stop `golem up` first. The dev server enables RCON on port 25576 with the password in `data/server/rcon.password`.
 
 ## The dashboard
 

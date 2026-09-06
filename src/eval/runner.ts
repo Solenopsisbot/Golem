@@ -41,6 +41,7 @@ export class EvalRunner {
     if (s.gamemode) await run(`gamemode ${s.gamemode} ${bot}`);
     if (s.clear_inventory) await run(`clear ${bot}`);
     if (s.teleport) await run(`tp ${bot} ${s.teleport.join(" ")}`);
+    if (s.spread) await run(`spreadplayers ${s.spread[0]} ${s.spread[1]} 1 ${s.spread[2]} false ${bot}`);
     if (s.time) await run(`time set ${s.time}`);
     if (s.weather) await run(`weather ${s.weather}`);
     for (const g of s.give) await run(`give ${bot} ${g.startsWith("minecraft:") ? g : "minecraft:" + g}`);
