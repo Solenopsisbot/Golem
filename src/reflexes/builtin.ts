@@ -64,15 +64,15 @@ export const selfPreservation: Reflex<Danger> = {
  */
 export const bunker: Reflex<{ hp: number; threats: number }> = {
   name: "bunker",
-  description: "At night, when hurt (or just respawned) with hostiles close, dig two blocks down and cap the hole with the dirt that came out.",
-  priority: 88,
+  description: "When hurt (or just respawned at night) with hostiles close, dig two blocks down and cap the hole with the dirt that came out. Beats running: under a canopy there's nowhere to run to.",
+  priority: 92,
   interrupts: true,
   cooldownMs: 45_000,
   check: async (ctx) => {
     const m = ctx.mirror;
-    if (m.phase !== "night" && m.phase !== "dusk") return null;
     if (m.status?.player?.inWater || m.status?.player?.inLava) return null;
-    const justRespawned = Date.now() - m.lastRespawnAt < 20_000;
+    const night = m.phase === "night" || m.phase === "dusk";
+    const justRespawned = night && Date.now() - m.lastRespawnAt < 20_000;
     const hurt = m.health <= 10 && m.damageInLast(5000) > 0;
     if (!hurt && !justRespawned) return null;
     const t = await ctx_threats(ctx, justRespawned ? 14 : 8);
