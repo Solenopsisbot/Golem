@@ -34,3 +34,6 @@ Done: eval harness (`golem eval`, RCON resets, predicates, results JSON, seven b
 
 ## Not scheduled, wanted
 Top-down map, annotated screenshots, blueprints and `build`, Ayusami persona bridge, voice, cheap-model helpers via Logfare, session resume across restarts for non-Claude agents.
+
+## M6: Beat the game (in progress, started 2026-09-07)
+The finish line is the ender dragon. Everything the minds need is a capability, not intelligence: they reached diamonds unaided in one evening. Landed: bow primitives (`shoot`, `use_hold`, `use_release` on the body's hold-and-release), dimension-aware reflexes (no bunker in the End, no bunker over lava), eval vocabulary for other dimensions (`dimension` and `rcon` predicates; `dimension`, `locate`, `summon` setup), and the ladder in `tasks/endgame/`: nether portal, blaze rod, ender pearl, eye of ender, stronghold, dragon. Each rung is run on its own with the gear the previous rung would have produced, so a failure is one capability, not a whole run. Open: library scripts for the portal, eye tracking and the dragon fight, then a full run from nothing.

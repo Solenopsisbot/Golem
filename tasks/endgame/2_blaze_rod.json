@@ -1,0 +1,36 @@
+{
+  "name": "blaze_rod",
+  "description": "Near a fortress in the Nether, kill blazes for a rod.",
+  "goal": "You are in the Nether near a fortress. Find it, find blazes (they spawn around blaze spawners in the fortress), kill them and get at least 1 blaze rod. Keep the rod safe: dig in when hurt, don't fight over lava. Say 'got a rod' when you have one.",
+  "timeout_s": 1500,
+  "setup": {
+    "clear_inventory": true,
+    "give": [
+      "diamond_sword",
+      "iron_helmet",
+      "iron_chestplate",
+      "iron_leggings",
+      "iron_boots",
+      "cooked_beef 16",
+      "cobblestone 64",
+      "diamond_pickaxe"
+    ],
+    "dimension": "the_nether",
+    "locate": {
+      "structure": "fortress",
+      "y": 72
+    }
+  },
+  "success": [
+    {
+      "type": "inventory",
+      "item": "blaze_rod",
+      "count": 1
+    }
+  ],
+  "tags": [
+    "endgame",
+    "nether",
+    "combat"
+  ]
+}

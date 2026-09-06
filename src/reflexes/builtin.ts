@@ -79,6 +79,7 @@ export const bunker: Reflex<{ hp: number; threats: number }> = {
   check: async (ctx) => {
     const m = ctx.mirror;
     if (m.status?.player?.inWater || m.status?.player?.inLava) return null;
+    if (m.dimension.endsWith("the_end")) return null;   // digging down on the End island can be the void
     const night = m.phase === "night" || m.phase === "dusk";
     const justRespawned = night && Date.now() - m.lastRespawnAt < 20_000;
     const hurt = m.health <= 10 && m.damageInLast(5000) > 0;
@@ -96,6 +97,9 @@ export const bunker: Reflex<{ hp: number; threats: number }> = {
       const blk = await p.blockAt(b);
       if (blk.liquid || blk.short === "bedrock" || blk.air) throw new GolemError("blocked", `can't bunker here: ${blk.short} at ${fmtPos(b)}`);
     }
+    // The floor of the hole must be solid too: two blocks down over a lava lake is worse than the mobs.
+    const floor = await p.blockAt({ x: here.x, y: here.y - 3, z: here.z });
+    if (floor.liquid || floor.air) throw new GolemError("blocked", `can't bunker here: ${floor.short} under the hole`);
     await p.mine(below1, { approach: false, tool: "auto", collect: false });
     await p.mine(below2, { approach: false, tool: "auto", collect: false });
     await sleep(600, ctx.token);   // fall into the hole, pickups land

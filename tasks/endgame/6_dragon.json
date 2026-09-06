@@ -1,0 +1,35 @@
+{
+  "name": "dragon",
+  "description": "Kill the ender dragon.",
+  "goal": "You are in the End with a bow, arrows, a diamond sword, armour, blocks and food. Kill the ender dragon: first shoot the end crystals on top of the obsidian pillars (shoot(entity) with the bow, or pillar up with blocks and break them by hand; stay away from the ones with iron bars until last), then wait near the bedrock fountain in the middle; when the dragon perches there, hit it with the sword, and shoot it with the bow while it flies. Never dig down here: below the island is the void. Say 'dragon dead' when it dies.",
+  "timeout_s": 3000,
+  "setup": {
+    "clear_inventory": true,
+    "give": [
+      "bow",
+      "arrow 128",
+      "diamond_sword",
+      "diamond_helmet",
+      "diamond_chestplate",
+      "diamond_leggings",
+      "diamond_boots",
+      "cooked_beef 32",
+      "cobblestone 192",
+      "ender_pearl 8",
+      "golden_apple 4"
+    ],
+    "dimension": "the_end"
+  },
+  "success": [
+    {
+      "type": "rcon",
+      "command": "execute if entity @e[type=minecraft:ender_dragon]",
+      "expect": "Test failed"
+    }
+  ],
+  "tags": [
+    "endgame",
+    "combat",
+    "boss"
+  ]
+}

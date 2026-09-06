@@ -13,6 +13,10 @@ export const PredicateSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("said"), includes: z.string() }),
   z.object({ type: z.literal("alive") }),
   z.object({ type: z.literal("script_exists"), name: z.string() }),
+  /** The bot is in this dimension ("the_nether", "the_end", "overworld"). */
+  z.object({ type: z.literal("dimension"), is: z.string() }),
+  /** A server command's reply must contain `expect` (and not contain `absent`). "execute if entity @e[type=ender_dragon]" replies "Test passed"/"Test failed". */
+  z.object({ type: z.literal("rcon"), command: z.string(), expect: z.string().optional(), absent: z.string().optional() }),
 ]);
 export type Predicate = z.infer<typeof PredicateSchema>;
 
@@ -35,6 +39,12 @@ export const TaskSchema = z.object({
     weather: z.enum(["clear", "rain", "thunder"]).optional(),
     gamemode: z.enum(["survival", "creative"]).optional(),
     give: z.array(z.string()).default([]),   // "oak_log 8", "iron_pickaxe"
+    /** Move the bot to another dimension first: spreadplayers on the End island, or a plain tp elsewhere. */
+    dimension: z.enum(["overworld", "the_nether", "the_end"]).optional(),
+    /** Teleport near the nearest structure of this kind (server `locate`), in `dimension` if set. */
+    locate: z.object({ structure: z.string(), y: z.number().default(70), offset: z.number().default(0) }).optional(),
+    /** Summon mobs next to the bot after everything else: "enderman 3". */
+    summon: z.array(z.string()).default([]),
   }).prefault({}),
   /** All predicates must hold at the same check for success. */
   success: z.array(PredicateSchema).min(1),

@@ -39,6 +39,8 @@ Scripts the agent writes live in `data/<agent>/workspace/shem/`; run traces in `
 
 ## Evals
 
+`tasks/basic/` is the survival ladder; `tasks/endgame/` runs the road to the dragon one rung at a time (each rung is set up with the previous rung's gear, and needs the dev server on normal difficulty: `MC_DIFFICULTY=normal scripts/dev-server.sh --bg`).
+
 ```bash
 bin/golem eval tasks/basic                 # every task in the folder, fresh mind session each
 bin/golem eval tasks/basic/wood.json --label "opus-act"   # one task, tagged for comparison

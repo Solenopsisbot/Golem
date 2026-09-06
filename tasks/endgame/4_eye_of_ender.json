@@ -1,0 +1,31 @@
+{
+  "name": "eye_of_ender",
+  "description": "Craft an eye of ender from a rod and a pearl.",
+  "goal": "You have a blaze rod and an ender pearl. Craft an eye of ender (blaze rod -> blaze powder, then blaze powder + ender pearl). Say 'eye made' when you have it.",
+  "timeout_s": 300,
+  "setup": {
+    "time": "day",
+    "clear_inventory": true,
+    "give": [
+      "blaze_rod 1",
+      "ender_pearl 1",
+      "crafting_table"
+    ],
+    "spread": [
+      110,
+      100,
+      40
+    ]
+  },
+  "success": [
+    {
+      "type": "inventory",
+      "item": "ender_eye",
+      "count": 1
+    }
+  ],
+  "tags": [
+    "endgame",
+    "craft"
+  ]
+}

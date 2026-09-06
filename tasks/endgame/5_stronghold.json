@@ -1,0 +1,38 @@
+{
+  "name": "stronghold",
+  "description": "Follow eyes of ender to a stronghold, find the portal room, fill the frame, enter the End.",
+  "goal": "You have 14 eyes of ender and there is a stronghold within a few hundred blocks. Throw an eye (use_item while holding it), watch where it flies with find_entities, and walk that way; when an eye drops down where you stand, dig down carefully (never straight down without checking) to the stronghold. Find the end portal room, put an eye in each of the 12 frames that lacks one, and jump in. Say 'in the end' when you are.",
+  "timeout_s": 2400,
+  "setup": {
+    "time": "day",
+    "clear_inventory": true,
+    "give": [
+      "ender_eye 14",
+      "diamond_pickaxe",
+      "diamond_sword",
+      "iron_helmet",
+      "iron_chestplate",
+      "iron_leggings",
+      "iron_boots",
+      "cooked_beef 32",
+      "cobblestone 128",
+      "torch 32",
+      "water_bucket"
+    ],
+    "locate": {
+      "structure": "stronghold",
+      "y": 70,
+      "offset": 150
+    }
+  },
+  "success": [
+    {
+      "type": "dimension",
+      "is": "the_end"
+    }
+  ],
+  "tags": [
+    "endgame",
+    "navigation"
+  ]
+}

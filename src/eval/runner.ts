@@ -42,10 +42,28 @@ export class EvalRunner {
     if (s.clear_inventory) await run(`clear ${bot}`);
     if (s.teleport) await run(`tp ${bot} ${s.teleport.join(" ")}`);
     if (s.spread) await run(`spreadplayers ${s.spread[0]} ${s.spread[1]} 1 ${s.spread[2]} false ${bot}`);
+    const dim = s.dimension ? `minecraft:${s.dimension}` : undefined;
+    if (s.locate) {
+      // "The nearest minecraft:fortress is at [X, ~, Z] (N blocks away)"; the source position matters, so give it one.
+      const out = await r.command(`execute ${dim ? `in ${dim} ` : ""}positioned 0 64 0 run locate structure minecraft:${s.locate.structure}`);
+      const m = out.match(/\[(-?\d+),\s*~?-?\d*,\s*(-?\d+)\]/);
+      if (!m) throw new Error(`locate ${s.locate.structure} failed: ${out.slice(0, 120)}`);
+      const x = Number(m[1]) + s.locate.offset, z = Number(m[2]) + s.locate.offset;
+      log.info(`located ${s.locate.structure} at ${x},${z}; teleporting`);
+      await run(`execute ${dim ? `in ${dim} ` : ""}run tp ${bot} ${x} ${s.locate.y} ${z}`);
+    } else if (dim === "minecraft:the_end") {
+      await run(`execute in ${dim} run spreadplayers 0 0 5 60 false ${bot}`);   // safe ground on the main island
+    } else if (dim) {
+      await run(`execute in ${dim} run tp ${bot} ~ 70 ~`);
+    }
     if (s.time) await run(`time set ${s.time}`);
     if (s.weather) await run(`weather ${s.weather}`);
     for (const g of s.give) await run(`give ${bot} ${g.startsWith("minecraft:") ? g : "minecraft:" + g}`);
     for (const c of s.commands) await run(c);
+    for (const sm of s.summon) {
+      const [mob, n] = sm.split(/\s+/);
+      for (let i = 0; i < Number(n ?? 1); i++) await run(`execute at ${bot} run summon minecraft:${mob} ~${3 + i} ~ ~${(i % 2 ? -1 : 1) * 3}`);
+    }
   }
 
   private async check(session: AgentSession, preds: Predicate[], said: string[], deaths: number): Promise<{ ok: boolean; detail: string }> {
@@ -68,6 +86,13 @@ export class EvalRunner {
         case "said": { hit = said.some((l) => l.toLowerCase().includes(pr.includes.toLowerCase())); details.push(`said "${pr.includes}": ${hit}`); break; }
         case "alive": { hit = deaths === 0; details.push(`deaths ${deaths}`); break; }
         case "script_exists": { hit = existsSync(resolve(session.agent.workspaceDir, "shem", `${pr.name}.shem`)); details.push(`script ${pr.name}: ${hit}`); break; }
+        case "dimension": { const d = session.rt.mirror.dimension.replace("minecraft:", ""); hit = d === pr.is; details.push(`dimension ${d}`); break; }
+        case "rcon": {
+          const out = await (await this.rconConnect()).command(pr.command.replace(/\{bot\}/g, session.agent.body.username));
+          hit = (!pr.expect || out.includes(pr.expect)) && (!pr.absent || !out.includes(pr.absent));
+          details.push(`rcon "${pr.command.slice(0, 40)}" -> ${out.slice(0, 40).replace(/\n/g, " ")}`);
+          break;
+        }
       }
       if (!hit) ok = false;
     }

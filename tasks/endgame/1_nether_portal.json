@@ -1,0 +1,31 @@
+{
+  "name": "nether_portal",
+  "description": "Build, light and enter a nether portal from given obsidian.",
+  "goal": "You have 10 obsidian and a flint and steel. Build a nether portal frame (4 wide, 5 tall, corners optional), light it, walk in and stay in it until you are in the Nether. Say 'in the nether' once you are.",
+  "timeout_s": 900,
+  "setup": {
+    "time": "day",
+    "clear_inventory": true,
+    "give": [
+      "obsidian 10",
+      "flint_and_steel",
+      "cooked_beef 8",
+      "cobblestone 32"
+    ],
+    "spread": [
+      110,
+      100,
+      40
+    ]
+  },
+  "success": [
+    {
+      "type": "dimension",
+      "is": "the_nether"
+    }
+  ],
+  "tags": [
+    "endgame",
+    "nether"
+  ]
+}

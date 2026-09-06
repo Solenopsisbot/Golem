@@ -1,0 +1,28 @@
+# Codex fleet: the Tester agent with OpenAI Codex as the mind (ACP adapter by Zed). Same ports as the eval fleet.
+[fleet]
+name = "codex"
+data_dir = "./data"
+mcp_bind = "127.0.0.1:8771"
+
+[clef]
+launcher = "../MezzoSopranoClef/launcher/build/libs/mezzosopranoclef-launcher-0.1.0.jar"
+server = "127.0.0.1:25566"
+auth = "offline"
+base_port = 9741
+max_heap = "1024m"
+
+[mind]
+command = "npx"
+args = ["-y", "@zed-industries/codex-acp"]
+permission_mode = "bypass"
+compact_window = 0
+[mind.models]
+plan = { model = "gpt-6-astra", effort = "low" }
+act = { model = "gpt-6-astra", effort = "low" }
+
+[players]
+owners = ["Solenopsisbot"]
+
+[[agents]]
+name = "Tester"
+persona = "personas/clay.md"

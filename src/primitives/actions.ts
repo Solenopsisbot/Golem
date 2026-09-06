@@ -135,6 +135,45 @@ export async function useItem(ctx: Ctx, hand: "main" | "off" = "main"): Promise<
   try { await ctx.body.call("use", { hand }); } catch (e) { throw fromClef(e, "use"); }
 }
 
+/** Hold right-click for `ticks` (20 = one second) and let go: bows, tridents, charging anything. */
+export async function useHold(ctx: Ctx, ticks = 25): Promise<void> {
+  try { await ctx.body.call("useHold", { ticks }); } catch (e) { throw fromClef(e, "useHold"); }
+  await sleep(ticks * 50 + 60, ctx.token);
+}
+export async function useRelease(ctx: Ctx): Promise<void> {
+  try { await ctx.body.call("useRelease"); } catch (e) { throw fromClef(e, "useRelease"); }
+}
+
+export interface ShootOpts { chargeTicks?: number; shots?: number; intervalMs?: number }
+/**
+ * Draw the bow at a target (an entity id or a position) and loose. Needs a bow and arrows in the
+ * inventory. Aims at the entity's current position (no lead), which is fine for end crystals,
+ * perched dragons and anything walking toward you; strafing mobs want several shots.
+ */
+export async function shoot(ctx: Ctx, target: number | Pos, opts: ShootOpts = {}): Promise<{ shots: number }> {
+  const inv = await inventory(ctx);
+  if (!inv.has("bow")) throw new GolemError("missing_item", "no bow in inventory");
+  if (!inv.items.some((i) => /arrow$/.test(i.item))) throw new GolemError("missing_item", "no arrows in inventory");
+  await selectItem(ctx, "bow");
+  const shots = opts.shots ?? 1;
+  return ctx.activity.run(`shoot ${typeof target === "number" ? `#${target}` : fmtPos(target)}`, async () => {
+    let fired = 0;
+    for (let i = 0; i < shots; i++) {
+      ctx.token.throwIfCancelled();
+      if (typeof target === "number") {
+        const e = await entityById(ctx, target);
+        if (!e) break;
+        await lookAt(ctx, { entityId: target });
+      } else await lookAt(ctx, { x: target.x + 0.5, y: target.y + 0.5, z: target.z + 0.5 });
+      await useHold(ctx, opts.chargeTicks ?? 25);
+      await useRelease(ctx);
+      fired++;
+      if (i < shots - 1) await sleep(opts.intervalMs ?? 400, ctx.token);
+    }
+    return { shots: fired };
+  });
+}
+
 export async function interactEntity(ctx: Ctx, id: number, hand: "main" | "off" = "main"): Promise<void> {
   const e = await entityById(ctx, id);
   if (!e) throw new GolemError("not_found", `entity ${id} not nearby`);

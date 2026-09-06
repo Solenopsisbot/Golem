@@ -1,0 +1,38 @@
+{
+  "name": "ender_pearl",
+  "description": "Kill endermen at night for a pearl.",
+  "goal": "It's night and there are endermen close by. Kill endermen until you have at least 1 ender pearl. Remember: they teleport when hit and get angry when looked at; keep your back to a wall or dig a two-high tunnel so they can't reach you from above. Say 'got a pearl' when you have one.",
+  "timeout_s": 900,
+  "setup": {
+    "time": "midnight",
+    "clear_inventory": true,
+    "give": [
+      "diamond_sword",
+      "iron_helmet",
+      "iron_chestplate",
+      "iron_leggings",
+      "iron_boots",
+      "cooked_beef 8",
+      "cobblestone 32"
+    ],
+    "spread": [
+      110,
+      100,
+      40
+    ],
+    "summon": [
+      "enderman 4"
+    ]
+  },
+  "success": [
+    {
+      "type": "inventory",
+      "item": "ender_pearl",
+      "count": 1
+    }
+  ],
+  "tags": [
+    "endgame",
+    "combat"
+  ]
+}

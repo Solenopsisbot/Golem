@@ -135,6 +135,9 @@ export function makeShemHost(rt: AgentRuntime): Host {
   def("place", async (p, a, n) => { const r = await p.place(toStr(arg(a, n, 0, "item") ?? ""), posOf(arg(a, n, 1, "pos") ?? null)); return { placed: r.placed }; });
   def("place_here", async (p, a, n) => { const at = await p.placeNearby(toStr(arg(a, n, 0, "item") ?? "")); return { placed: true, pos: new Vec3(at.x, at.y, at.z, true) }; });
   def("use_item", async (p, a, n) => { await p.useItem((arg(a, n, 0, "hand") as "main" | "off") ?? "main"); return null; });
+  def("use_hold", async (p, a, n) => { await p.useHold(toNum(arg(a, n, 0, "ticks") ?? 25)); return null; });
+  def("use_release", async (p) => { await p.useRelease(); return null; });
+  def("shoot", async (p, a, n) => { const t = arg(a, n, 0, "target"); const target = typeof t === "number" ? t : (t && typeof t === "object" && "id" in (t as object) ? Number((t as { id: number }).id) : posOf(t ?? null)); const r = await p.shoot(target, { shots: toNum(arg(a, n, 1, "shots") ?? 1), chargeTicks: toNum(arg(a, n, 2, "charge") ?? 25) }); return r.shots; });
   def("use_on", async (p, a, n) => { const t = arg(a, n, 0, "target") ?? null; if (t && typeof t === "object" && !(t instanceof Vec3) && typeof (t as Record_).id === "number") await p.interactEntity((t as Record_).id as number); else await p.useOnBlock(posOf(t)); return null; });
   def("attack", async (p, a, n) => { const r = await p.attack(entityTarget(arg(a, n, 0, "target") ?? null), { timeoutMs: durArg(arg(a, n, 1, "timeout"), 30_000) }); return { killed: r.killed, hits: r.hits }; });
   def("attack_nearest", async (p, a, n) => { const kinds = kindsArg(arg(a, n, 0, "kinds")); const es = await p.entities({ radius: toNum(arg(a, n, 1, "radius") ?? 16), kinds, hostileOnly: !kinds }); if (!es[0]) throw new GolemError("not_found", "nothing to attack"); const r = await p.attack(es[0].id); return { killed: r.killed, hits: r.hits, target: entityRecord(es[0]) }; });
