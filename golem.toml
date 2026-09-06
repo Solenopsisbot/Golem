@@ -25,3 +25,8 @@ default_on = ["auto_respawn", "self_preservation", "unstuck", "auto_eat", "item_
 [[agents]]
 name = "Clay"
 persona = "personas/clay.md"
+
+[[agents]]
+name = "Flint"
+persona = "personas/flint.md"
+reflexes.on = ["auto_respawn", "self_preservation", "self_defense", "unstuck", "auto_eat", "item_collecting"]

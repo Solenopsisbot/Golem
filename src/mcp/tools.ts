@@ -119,6 +119,10 @@ export const TOOLS: ToolDef[] = [
     async run(a, { p }) { const r = await p.say(a.text); return ok(`said: ${r.sent}`); } }),
   def({ name: "whisper", description: "Private message a player.", input: { player: z.string(), text: z.string().min(1) },
     async run(a, { p }) { const r = await p.whisper(a.player, a.text); return ok(`whispered to ${a.player}: ${r.sent}`); } }),
+  def({ name: "dm", description: "Send a message to another golem in this fleet (see `agents`). Conversations are capped per pair, so say what matters and don't chat for the sake of it.", input: { agent: z.string(), text: z.string().min(1) },
+    async run(a, { drive, rt }) { if (!drive.bus) throw new GolemError("unsupported", "no agent bus in this fleet"); const r = drive.bus.send(rt.agent.name, a.agent, a.text); rt.trace.mark("dm", { to: a.agent, text: a.text }); return ok(`sent to ${a.agent}${r.remaining <= 2 ? ` (${r.remaining} messages left before this conversation pauses)` : ""}`); } }),
+  def({ name: "agents", description: "The other golems in this fleet and what they're doing.", input: {},
+    async run(_a, { drive, rt }) { return ok(drive.bus ? drive.bus.roster(rt.agent.name) : "no agent bus in this fleet"); } }),
   def({ name: "inbox", description: "Anything that arrived since your turn started (chat, damage, reflexes).", input: {},
     async run(_a, { drive }) { return ok(drive.peekInbox()); } }),
 

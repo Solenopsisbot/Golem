@@ -16,6 +16,7 @@ import { parseFastCommand, routeChat, type FastCommand } from "./chat.ts";
 import { Inbox, renderInbox, type InboxItem } from "./inbox.ts";
 import { Journal, Transcript } from "./transcript.ts";
 import type * as acp from "@agentclientprotocol/sdk";
+import type { AgentBus, BusMessage } from "../comms/bus.ts";
 
 export interface DriveOptions {
   rt: AgentRuntime;
@@ -25,10 +26,13 @@ export interface DriveOptions {
   journal: Journal;
   /** Bridge event sink (SSE, webhooks). */
   emit: (ev: { type: string; [k: string]: unknown }) => void;
+  /** The fleet's agent bus, when there is one. */
+  bus?: AgentBus;
 }
 
 export class Drive {
   readonly inbox: Inbox;
+  readonly bus: AgentBus | undefined;
   goal = "";
   private readonly rt: AgentRuntime;
   private readonly mind: Mind;
@@ -58,6 +62,7 @@ export class Drive {
     this.transcript = opts.transcript;
     this.journal = opts.journal;
     this.emit = opts.emit;
+    this.bus = opts.bus;
     this.inbox = new Inbox({ max: this.rt.agent.drive.inbox_max });
     this.goal = readGoal(this.rt.agent);
   }
@@ -103,6 +108,12 @@ export class Drive {
   }
 
   peekInbox(): string { return renderInbox(this.inbox.snapshot()); }
+
+  /** A message from another agent (or the bus itself) arrives like chat from a trusted player. */
+  deliverFromBus(msg: BusMessage): void {
+    this.journal.note(`${msg.from} (agent): ${msg.text}`);
+    this.push({ kind: "agent", priority: msg.from === "golem" ? 30 : 55, text: msg.text, from: msg.from });
+  }
   /** Cancel the mind's current turn (used by met from the bridge). */
   async mindCancel(): Promise<void> { await this.mind.cancel(); }
 

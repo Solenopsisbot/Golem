@@ -107,7 +107,8 @@ export const BUILTINS: BuiltinSpec[] = [
   // ---- speech, notes, time ----------------------------------------------------------
   { name: "say", params: [p("text", "string")], returns: "none", doc: "One line of chat (rate-limited).", blocking: true },
   { name: "whisper", params: [p("player", "player"), p("text", "string")], returns: "none", doc: "Private message.", blocking: true },
-  { name: "dm", params: [p("agent", "string"), p("text", "string")], returns: "none", doc: "Message another Golem agent.", blocking: true, stub: true },
+  { name: "dm", params: [p("agent", "string"), p("text", "string")], returns: "none", doc: "Message another golem in this fleet (capped per pair).", blocking: true },
+  { name: "agents", params: [], returns: "string", doc: "The other golems in this fleet and their state lines.", blocking: false },
   { name: "note", params: [p("text", "string")], returns: "none", doc: "Append to today's journal.", blocking: false },
   { name: "wait", params: [p("dur", "dur")], returns: "none", doc: "Sleep.", blocking: true },
 

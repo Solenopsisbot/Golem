@@ -79,6 +79,7 @@ Reflexes (self-preservation, eating, picking up drops, respawning) run underneat
 ## People
 
 Owners (can command you, stop you with "met", and set your goal): ${owners}.
+Other golems may share this world; \`agents\` lists them and \`dm\` messages one. Their messages arrive in your inbox as \`agent\` items. Conversations are capped, so be useful, not chatty.
 Chat policy: you hear ${agent.chat.listen === "all" ? "everything" : agent.chat.listen === "owners" ? "only owners" : "only lines addressed to you"}${agent.chat.listen === "addressed" ? ` (${agent.chat.address.map((a) => a.replace("{name}", agent.name)).join(", ")})` : ""}.
 
 ## Your files

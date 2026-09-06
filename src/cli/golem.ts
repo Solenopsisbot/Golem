@@ -24,6 +24,8 @@ import { EvalRunner } from "../eval/runner.ts";
 import { loadTasks } from "../eval/task.ts";
 import { replay } from "./replay.ts";
 import { evalReport } from "../eval/report.ts";
+import { AgentBus } from "../comms/bus.ts";
+import { parseDuration } from "../config/schema.ts";
 import readline from "node:readline/promises";
 import { agentNames, loadConfig, resolveAgent } from "../config/load.ts";
 import { bodyLogPath, isBodyRunning, killBody, spawnBody, superviseBody, type Supervisor } from "../fleet/body.ts";
@@ -106,6 +108,7 @@ async function main(): Promise<void> {
       if (!names.length) { log.error("no agents in golem.toml"); process.exit(1); }
       const host = new GolemHttpHost(loaded.config.fleet.mcp_bind);
       await host.start();
+      const bus = new AgentBus({ maxTurns: loaded.config.comms.conversations.max_turns, cooldownMs: parseDuration(loaded.config.comms.conversations.cooldown) });
       const supervisors: Supervisor[] = [];
       const sessions: AgentSession[] = [];
       const shutdown = async () => {
@@ -129,7 +132,7 @@ async function main(): Promise<void> {
       }
       await Promise.all(names.map(async (name) => {
         const agent = resolveAgent(loaded, name);
-        const s = await AgentSession.start(agent, host, { orient: !noOrient });
+        const s = await AgentSession.start(agent, host, { orient: !noOrient, bus });
         sessions.push(s);
         s.rt.body.on("chat", (d) => log.info(`[${name}] chat ${d.sender ? d.sender + ": " : ""}${d.text}`));
       }));

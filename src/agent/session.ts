@@ -15,6 +15,7 @@ import { ensureWorkspace, writeOrientation } from "../workspace/generate.ts";
 import { ShemEngine } from "../shem/engine.ts";
 import { describeRun } from "../shem/runs.ts";
 import { makeLog, type Logger } from "../util/log.ts";
+import type { AgentBus } from "../comms/bus.ts";
 
 export class AgentSession {
   readonly agent: AgentConfig;
@@ -28,6 +29,7 @@ export class AgentSession {
   private readonly journal: Journal;
   private stopping = false;
   private mindRestarts = 0;
+  private unregisterBus: (() => void) | undefined;
 
   private constructor(agent: AgentConfig, host: GolemHttpHost) {
     this.agent = agent;
@@ -39,7 +41,7 @@ export class AgentSession {
     this.journal = new Journal(agent.workspaceDir);
   }
 
-  static async start(agent: AgentConfig, host: GolemHttpHost, opts: { waitForBodyMs?: number; orient?: boolean; freshMind?: boolean } = {}): Promise<AgentSession> {
+  static async start(agent: AgentConfig, host: GolemHttpHost, opts: { waitForBodyMs?: number; orient?: boolean; freshMind?: boolean; bus?: AgentBus } = {}): Promise<AgentSession> {
     const s = new AgentSession(agent, host);
     await s.rt.start({ waitForBodyMs: opts.waitForBodyMs ?? 900_000 });
     s.journal.note(`session started; ${s.rt.mirror.summary(agent.name)}`);
@@ -63,7 +65,8 @@ export class AgentSession {
       onUpdate: (u) => s.drive?.onUpdate(u),
       onExit: () => s.onMindExit(),
     });
-    s.drive = new Drive({ rt: s.rt, mind: s.mind, log: s.log.child("drive"), transcript: s.transcript, journal: s.journal, emit });
+    s.drive = new Drive({ rt: s.rt, mind: s.mind, log: s.log.child("drive"), transcript: s.transcript, journal: s.journal, emit, bus: opts.bus });
+    if (opts.bus) s.unregisterBus = opts.bus.register({ name: agent.name, deliver: (m) => s.drive.deliverFromBus(m), state: () => s.drive.stateHeader().replace(/^\[state\]\s*/, "") });
     s.rt.drive = s.drive;
     host.register(agent.name, { rt: s.rt, drive: s.drive, shem, token: tokens.mcp, transcriptPath: resolve(agent.dataDir, "transcript.jsonl"), subscribe: (l) => { s.listeners.add(l); return () => s.listeners.delete(l); } });
     shem.runs.onEnd(({ type, run }) => {
@@ -102,6 +105,7 @@ export class AgentSession {
 
   async stop(): Promise<void> {
     this.stopping = true;
+    this.unregisterBus?.();
     this.drive?.stop();
     await this.mind?.stop().catch(() => {});
     this.host.unregister(this.agent.name);

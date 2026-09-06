@@ -159,6 +159,8 @@ export function makeShemHost(rt: AgentRuntime): Host {
   def("say", async (p, a, n) => { await p.say(toStr(arg(a, n, 0, "text") ?? "")); return null; });
   def("whisper", async (p, a, n) => { await p.whisper(toStr(arg(a, n, 0, "player") ?? ""), toStr(arg(a, n, 1, "text") ?? "")); return null; });
   def("note", (_p, a, n) => { journal.note(toStr(arg(a, n, 0, "text") ?? "")); return null; });
+  def("dm", (_p, a, n) => { const bus = rt.drive?.bus; if (!bus) throw new GolemError("unsupported", "no agent bus in this fleet"); bus.send(agent.name, toStr(arg(a, n, 0, "agent") ?? ""), toStr(arg(a, n, 1, "text") ?? "")); return null; });
+  def("agents", () => rt.drive?.bus ? rt.drive.bus.roster(agent.name) : "no agent bus in this fleet");
   calls.set("wait", async (a, n, ctx) => { const { sleep } = await import("../primitives/errors.ts"); await sleep(toDur(arg(a, n, 0, "dur") ?? null), ctx.token); return null; });
 
   // ---- pure helpers ----
