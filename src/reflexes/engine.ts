@@ -119,6 +119,7 @@ export class ReflexEngine {
           if (note || r.interrupts || r.notify) this.opts.onFire?.({ name: r.name, note: text, at: Date.now(), trigger });
         } catch (e) {
           const msg = e instanceof GolemError ? `${e.kind}: ${e.message}` : String(e);
+          if (token.cancelled) { this.log.debug(`reflex ${r.name} stopped: ${token.reason}`); this.ctx.trace.mark("reflex", { name: r.name, phase: "cancelled", reason: token.reason }); return; }
           const n = (this.failures.get(r.name) ?? 0) + 1;
           this.failures.set(r.name, n);
           if (n <= 2) this.log.warn(`reflex ${r.name} failed: ${msg}`); else this.log.debug(`reflex ${r.name} failed (${n}x): ${msg}`);
