@@ -55,7 +55,7 @@ function parseArgs(argv: string[]) {
     else if (a === "-c") oneShot = argv[++i];
     else if (a === "--no-orient") noOrient = true;
     else if (a === "--label") label = argv[++i];
-    else if (a === "--hours") hours = Number(args[++i] ?? 1);
+    else if (a === "--hours") hours = Number(argv[++i] ?? 1);
     else if (a === "--keep-session") keepSession = true;
     else if (a === "--from") from = argv[++i];
     else if (a === "--to") to = argv[++i];
@@ -64,7 +64,7 @@ function parseArgs(argv: string[]) {
     else if (a.startsWith("-")) usage();
     else positional.push(a);
   }
-  return { positional, config, oneShot, noOrient, label, keepSession, from, to, grep, all };
+  return { positional, config, oneShot, noOrient, label, keepSession, from, to, grep, all, hours };
 }
 
 async function withRuntime(agentName: string, configPath: string | undefined, fn: (rt: AgentRuntime) => Promise<void>, opts: { waitForBodyMs?: number } = {}): Promise<void> {
@@ -81,7 +81,7 @@ async function withRuntime(agentName: string, configPath: string | undefined, fn
 }
 
 async function main(): Promise<void> {
-  const { positional, config, oneShot, noOrient, label, keepSession, from, to, grep, all } = parseArgs(process.argv.slice(2));
+  const { positional, config, oneShot, noOrient, label, keepSession, from, to, grep, all, hours } = parseArgs(process.argv.slice(2));
   const [cmd, ...rest] = positional;
   if (!cmd) usage();
 
