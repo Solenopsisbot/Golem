@@ -9,6 +9,7 @@
 //   golem talk <agent>         chat with a running agent as its first owner (via the bridge)
 //   golem prompt <agent> "text"   push one line into a running agent's inbox
 //   golem eval <task.json|dir> [agent] [--label name] [--keep-session]   run eval tasks, record results in data/eval/
+//   golem eval-report [--label x]   results table from data/eval/
 //   golem replay <agent> [--from HH:MM] [--to HH:MM] [--grep re] [--all]   the body trace as a timeline
 //   golem gen-types            regenerate src/body/schema.gen.ts from Clef's schema.json
 import { spawnSync } from "node:child_process";
@@ -22,6 +23,7 @@ import { ShemEngine } from "../shem/engine.ts";
 import { EvalRunner } from "../eval/runner.ts";
 import { loadTasks } from "../eval/task.ts";
 import { replay } from "./replay.ts";
+import { evalReport } from "../eval/report.ts";
 import readline from "node:readline/promises";
 import { agentNames, loadConfig, resolveAgent } from "../config/load.ts";
 import { bodyLogPath, isBodyRunning, killBody, spawnBody, superviseBody, type Supervisor } from "../fleet/body.ts";
@@ -31,7 +33,7 @@ import { shellLoop } from "./shell.ts";
 const log = makeLog("golem");
 
 function usage(): never {
-  console.error(`usage: golem <up|body|attach|shell|status|met|talk|prompt|eval|replay|gen-types> [agent|task] [-c "cmds"] [--config path] [--no-orient] [--label x] [--keep-session] [--from HH:MM] [--to HH:MM] [--grep re] [--all]`);
+  console.error(`usage: golem <up|body|attach|shell|status|met|talk|prompt|eval|eval-report|replay|gen-types> [agent|task] [-c "cmds"] [--config path] [--no-orient] [--label x] [--keep-session] [--from HH:MM] [--to HH:MM] [--grep re] [--all]`);
   process.exit(2);
 }
 
@@ -135,6 +137,11 @@ async function main(): Promise<void> {
       log.info(`bridge: http://${host.host}:${host.port}/agents/<name>/{inbox,say,status,events} (bearer token in data/<name>/tokens.json)`);
       for (const s of sessions) log.info(`dashboard: http://${host.host}:${host.port}/agents/${encodeURIComponent(s.agent.name)}/dash?token=${ensureTokens(s.agent).mcp}`);
       await new Promise(() => {}); // run until signalled
+      return;
+    }
+    case "eval-report": {
+      const loaded = loadConfig(config);
+      console.log(evalReport(resolve(loaded.rootDir, loaded.config.eval.results_dir), label));
       return;
     }
     case "replay": {
