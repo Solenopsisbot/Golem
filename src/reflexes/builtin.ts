@@ -3,7 +3,8 @@ import type { Ctx } from "../primitives/context.ts";
 import { sleep } from "../primitives/errors.ts";
 import type { Entity } from "../primitives/perception.ts";
 import type { Reflex } from "./engine.ts";
-import { dist } from "../util/geom.ts";
+import { dist, fmtPos } from "../util/geom.ts";
+import { GolemError } from "../primitives/errors.ts";
 
 export const autoRespawn: Reflex<true> = {
   name: "auto_respawn",
@@ -54,6 +55,47 @@ export const selfPreservation: Reflex<Danger> = {
       return "on fire: moved";
     }
     return `hp ${d.hp.toFixed(0)}: took damage with no visible threat (fall/environment?)`;
+  },
+};
+
+/**
+ * The panic bunker: at night, hurt, with hostiles close, digging two blocks down and capping the
+ * hole beats running. Works with an empty inventory because the dirt comes out of the hole.
+ */
+export const bunker: Reflex<{ hp: number; threats: number }> = {
+  name: "bunker",
+  description: "At night, when hurt with hostiles close, dig two blocks down and cap the hole with the dirt that came out.",
+  priority: 88,
+  interrupts: true,
+  cooldownMs: 45_000,
+  check: async (ctx) => {
+    const m = ctx.mirror;
+    if (m.phase !== "night" && m.phase !== "dusk") return null;
+    if (m.health > 10 || m.damageInLast(5000) === 0) return null;
+    if (m.status?.player?.inWater || m.status?.player?.inLava) return null;
+    const t = await ctx_threats(ctx, 8);
+    return t.length ? { hp: m.health, threats: t.length } : null;
+  },
+  async act(p, d) {
+    const ctx = p.ctx;
+    await p.stop();
+    const here = ctx.mirror.blockPos;
+    const below1 = { x: here.x, y: here.y - 1, z: here.z };
+    const below2 = { x: here.x, y: here.y - 2, z: here.z };
+    for (const b of [below1, below2]) {
+      const blk = await p.blockAt(b);
+      if (blk.liquid || blk.short === "bedrock" || blk.air) throw new GolemError("blocked", `can't bunker here: ${blk.short} at ${fmtPos(b)}`);
+    }
+    await p.mine(below1, { approach: false, tool: "auto", collect: false });
+    await p.mine(below2, { approach: false, tool: "auto", collect: false });
+    await sleep(600, ctx.token);   // fall into the hole, pickups land
+    const feet = ctx.mirror.blockPos;
+    const cap = { x: feet.x, y: feet.y + 2, z: feet.z };
+    const inv = await p.inventory();
+    const filler = ["cobblestone", "dirt", "stone", "netherrack", "sand", "gravel", "oak_planks"].find((i) => inv.has(i)) ?? inv.items.find((i) => ctx.mc.blocksByName[i.item.replace("minecraft:", "")])?.item;
+    if (!filler) return `bunkered ${fmtPos(feet)} but nothing to cap the hole with`;
+    await p.place(filler, cap, { approach: false });
+    return `bunkered at ${fmtPos(feet)} (hp ${d.hp.toFixed(0)}, ${d.threats} threats): two down, capped with ${filler.replace("minecraft:", "")}. Dig out when it's day.`;
   },
 };
 
@@ -164,7 +206,7 @@ export const idleStaring: Reflex<Entity> = {
 };
 
 export const BUILTIN_REFLEXES: Reflex<any>[] = [
-  autoRespawn, selfPreservation, selfDefense, cowardice, autoEat, unstuck, itemCollecting, idleStaring,
+  autoRespawn, bunker, selfPreservation, selfDefense, cowardice, autoEat, unstuck, itemCollecting, idleStaring,
 ];
 
 // Small local helpers so check() functions stay one-liners. They call the body, so the engine's

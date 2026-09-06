@@ -20,7 +20,7 @@ listen = "addressed"
 speech = "explicit"
 
 [reflexes]
-default_on = ["auto_respawn", "self_preservation", "unstuck", "auto_eat", "item_collecting", "idle_staring"]
+default_on = ["auto_respawn", "bunker", "self_preservation", "unstuck", "auto_eat", "item_collecting", "idle_staring"]
 
 [[agents]]
 name = "Clay"
@@ -29,4 +29,4 @@ persona = "personas/clay.md"
 [[agents]]
 name = "Flint"
 persona = "personas/flint.md"
-reflexes.on = ["auto_respawn", "self_preservation", "self_defense", "unstuck", "auto_eat", "item_collecting"]
+reflexes.on = ["auto_respawn", "bunker", "self_preservation", "self_defense", "unstuck", "auto_eat", "item_collecting"]

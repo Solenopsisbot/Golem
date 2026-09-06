@@ -104,7 +104,7 @@ export const EtiquetteSection = z.object({
 
 export const ReflexesSection = z.object({
   default_on: z.array(z.string()).default([
-    "auto_respawn", "self_preservation", "unstuck", "auto_eat", "item_collecting", "idle_staring",
+    "auto_respawn", "bunker", "self_preservation", "unstuck", "auto_eat", "item_collecting", "idle_staring",
   ]),
   allow_custom: z.boolean().default(false),
 });
