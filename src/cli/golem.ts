@@ -9,6 +9,7 @@
 //   golem talk <agent>         chat with a running agent as its first owner (via the bridge)
 //   golem prompt <agent> "text"   push one line into a running agent's inbox
 //   golem eval <task.json|dir> [agent] [--label name] [--keep-session]   run eval tasks, record results in data/eval/
+//   golem replay <agent> [--from HH:MM] [--to HH:MM] [--grep re] [--all]   the body trace as a timeline
 //   golem gen-types            regenerate src/body/schema.gen.ts from Clef's schema.json
 import { spawnSync } from "node:child_process";
 import { resolve, dirname } from "node:path";
@@ -20,6 +21,7 @@ import { ensureTokens } from "../config/load.ts";
 import { ShemEngine } from "../shem/engine.ts";
 import { EvalRunner } from "../eval/runner.ts";
 import { loadTasks } from "../eval/task.ts";
+import { replay } from "./replay.ts";
 import readline from "node:readline/promises";
 import { agentNames, loadConfig, resolveAgent } from "../config/load.ts";
 import { bodyLogPath, isBodyRunning, killBody, spawnBody, superviseBody, type Supervisor } from "../fleet/body.ts";
@@ -29,7 +31,7 @@ import { shellLoop } from "./shell.ts";
 const log = makeLog("golem");
 
 function usage(): never {
-  console.error(`usage: golem <up|body|attach|shell|status|met|talk|prompt|eval|gen-types> [agent|task] [-c "cmds"] [--config path] [--no-orient] [--label x] [--keep-session]`);
+  console.error(`usage: golem <up|body|attach|shell|status|met|talk|prompt|eval|replay|gen-types> [agent|task] [-c "cmds"] [--config path] [--no-orient] [--label x] [--keep-session] [--from HH:MM] [--to HH:MM] [--grep re] [--all]`);
   process.exit(2);
 }
 
@@ -40,6 +42,7 @@ function parseArgs(argv: string[]) {
   let noOrient = false;
   let label: string | undefined;
   let keepSession = false;
+  let from: string | undefined, to: string | undefined, grep: string | undefined, all = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
     if (a === "--config") config = argv[++i];
@@ -47,10 +50,14 @@ function parseArgs(argv: string[]) {
     else if (a === "--no-orient") noOrient = true;
     else if (a === "--label") label = argv[++i];
     else if (a === "--keep-session") keepSession = true;
+    else if (a === "--from") from = argv[++i];
+    else if (a === "--to") to = argv[++i];
+    else if (a === "--grep") grep = argv[++i];
+    else if (a === "--all") all = true;
     else if (a.startsWith("-")) usage();
     else positional.push(a);
   }
-  return { positional, config, oneShot, noOrient, label, keepSession };
+  return { positional, config, oneShot, noOrient, label, keepSession, from, to, grep, all };
 }
 
 async function withRuntime(agentName: string, configPath: string | undefined, fn: (rt: AgentRuntime) => Promise<void>, opts: { waitForBodyMs?: number } = {}): Promise<void> {
@@ -67,7 +74,7 @@ async function withRuntime(agentName: string, configPath: string | undefined, fn
 }
 
 async function main(): Promise<void> {
-  const { positional, config, oneShot, noOrient, label, keepSession } = parseArgs(process.argv.slice(2));
+  const { positional, config, oneShot, noOrient, label, keepSession, from, to, grep, all } = parseArgs(process.argv.slice(2));
   const [cmd, ...rest] = positional;
   if (!cmd) usage();
 
@@ -126,6 +133,12 @@ async function main(): Promise<void> {
       log.info(`bridge: http://${host.host}:${host.port}/agents/<name>/{inbox,say,status,events} (bearer token in data/<name>/tokens.json)`);
       for (const s of sessions) log.info(`dashboard: http://${host.host}:${host.port}/agents/${encodeURIComponent(s.agent.name)}/dash?token=${ensureTokens(s.agent).mcp}`);
       await new Promise(() => {}); // run until signalled
+      return;
+    }
+    case "replay": {
+      const name = rest[0]; if (!name) usage();
+      const agent = resolveAgent(loadConfig(config), name);
+      await replay(agent.tracePath, { from, to, grep, all }, (l) => console.log(l));
       return;
     }
     case "eval": {

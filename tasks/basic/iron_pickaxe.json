@@ -1,0 +1,9 @@
+{
+  "name": "iron_pickaxe",
+  "description": "Ingots and sticks to an iron pickaxe (needs a crafting table).",
+  "goal": "Craft an iron pickaxe from what you carry. Say 'done' when you're holding one.",
+  "timeout_s": 420,
+  "setup": { "time": "day", "clear_inventory": true, "give": ["iron_ingot 3", "stick 2", "crafting_table 1"] },
+  "success": [ { "type": "inventory", "item": "iron_pickaxe", "count": 1 } ],
+  "tags": ["basic", "craft"]
+}

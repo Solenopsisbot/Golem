@@ -1,0 +1,29 @@
+{
+  "name": "sleep",
+  "description": "Place a bed and sleep through the night.",
+  "goal": "It's night. Place the bed you carry somewhere safe and sleep in it. Say 'slept' once you did.",
+  "timeout_s": 300,
+  "setup": {
+    "time": "night",
+    "weather": "clear",
+    "clear_inventory": true,
+    "give": [
+      "red_bed 1",
+      "torch 4"
+    ]
+  },
+  "success": [
+    {
+      "type": "said",
+      "includes": "slept"
+    },
+    {
+      "type": "alive"
+    }
+  ],
+  "fail": [],
+  "tags": [
+    "basic",
+    "survival"
+  ]
+}
