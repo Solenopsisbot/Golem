@@ -28,7 +28,8 @@ const SEEDS: Record<string, string> = {
 
 const SHARED_SEEDS: Record<string, string> = {
   "places.md": "# Shared places\n\nEvery golem in this fleet reads and edits this file. One per line: `name: (x, y, z) dimension — note`. Bases, farms, portals, danger spots, where the good ore was.\n",
-  "README.md": "# world/shared/\n\nShared by every golem in the fleet. `chests.md` is Golem's index of every container any of you has opened (read-only; open a container to refresh it). `places.md` is yours together.\n",
+  "tasks.md": "# Fleet tasks\n\nA task board every golem in this fleet can read and edit. One task per line. Claim before you start, tick when done, add what you notice needs doing.\n\n- [ ] example: stock the base chest with 16 iron (claimed: nobody)\n",
+  "README.md": "# world/shared/\n\nShared by every golem in the fleet. `chests.md` is Golem's index of every container any of you has opened (read-only; open a container to refresh it). `places.md` and `tasks.md` are yours together.\n",
 };
 
 /** Create the fleet's shared world dir (if configured) and link it into this workspace as world/shared. */
@@ -115,7 +116,7 @@ Chat policy: you hear ${agent.chat.listen === "all" ? "everything" : agent.chat.
 - \`memory/places.md\`, \`memory/people.md\`, \`memory/notes.md\`: yours. Edit them freely; they persist across sessions.
 - \`memory/journal/\`: a daily log Golem writes for you (deaths, reflexes, chat). Read yesterday's if you're unsure what happened.
 - \`world/\`: what Golem has recorded about the world (chests seen, deaths). Read-only.${agent.sharedWorldDir ? `
-- \`world/shared/\`: shared with every golem in this fleet. \`chests.md\` is Golem's index of every container any of you has opened, with who last looked (read-only). \`places.md\` is yours together: bases, farms, danger spots. Read it before asking another golem where something is; write to it when you build or find something the others should know.` : ""}
+- \`world/shared/\`: shared with every golem in this fleet. \`chests.md\` is Golem's index of every container any of you has opened, with who last looked (read-only). \`places.md\` is yours together: bases, farms, danger spots. Read it before asking another golem where something is; write to it when you build or find something the others should know. \`tasks.md\` is the fleet's task board: claim a line before starting it, tick it when done, add what you see needs doing. Dividing work through the board beats negotiating it over dm.` : ""}
 - \`shem/\`: your Shem scripts (see below). \`shem/lib/\` is the read-only standard library.
 - \`shots/\`: screenshots you take with \`see\` and \`map\`.
 
