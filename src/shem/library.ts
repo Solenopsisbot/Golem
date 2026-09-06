@@ -98,7 +98,9 @@ export class Library {
         return [{ severity: "error", message: `use ${JSON.stringify(u.path)}: ${(e as Error).message}`, loc: u.loc }];
       }
     }
-    return check(lf.file, { ...opts, imported, reflexFile: opts.reflexFile ?? lf.rel.startsWith("reflexes/") });
+    const known = new Map<string, string>();
+    for (const other of this.all()) if (other !== lf && !other.error) for (const sc of other.file.scripts) if (!known.has(sc.name)) known.set(sc.name, other.rel);
+    return check(lf.file, { ...opts, imported, known, reflexFile: opts.reflexFile ?? lf.rel.startsWith("reflexes/") });
   }
 
   /** Every .shem file under the roots. */

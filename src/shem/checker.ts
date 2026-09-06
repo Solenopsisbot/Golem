@@ -18,6 +18,8 @@ export interface CheckOptions {
   imported?: Map<string, { params: { name: string; hasDefault: boolean; type: string | null }[] }>;
   /** True when the file lives under shem/reflexes/. */
   reflexFile?: boolean;
+  /** Every script the library knows, by name -> file ref, so "unknown function" can say where it lives. */
+  known?: Map<string, string>;
 }
 
 class Scope {
@@ -76,7 +78,11 @@ export function check(file: File, opts: CheckOptions = {}): Diagnostic[] {
       return;
     }
     const b = BUILTIN_BY_NAME.get(name);
-    if (!b) { err(`unknown function ${name}`, e.loc); return; }
+    if (!b) {
+      const where = opts.known?.get(name);
+      err(where ? `${name} is a script in ${where}; add \`use "${where}"\` at the top of the file` : `unknown function ${name}`, e.loc);
+      return;
+    }
     if (b.stub) warn(`${name} is not implemented yet; it will fail with 'unsupported'`, e.loc);
     if (positional > b.params.length) err(`${name} takes ${b.params.length} argument(s), got ${positional}`, e.loc);
     for (const a of named) if (!b.params.some((p) => p.name === a.name)) err(`${name} has no parameter ${a.name} (has: ${b.params.map((p) => p.name).join(", ")})`, a.loc);
