@@ -10,7 +10,7 @@ function fakeServer(): Promise<{ port: number; close: () => void; seen: string[]
     const srv = createServer((sock) => {
       let buf = Buffer.alloc(0);
       sock.on("data", (d) => {
-        buf = Buffer.concat([buf, d]);
+        buf = Buffer.concat([buf, Buffer.isBuffer(d) ? d : Buffer.from(String(d))]);
         for (;;) {
           if (buf.length < 4) return;
           const len = buf.readInt32LE(0);
