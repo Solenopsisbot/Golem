@@ -54,6 +54,8 @@ export class Drive {
   private turnsSincePlan = 0;
   private emptyGoalTurns = 0;
   private lastTurnWasGoalTick = false;
+  private readonly deathTimes: number[] = [];
+  private deathLoopUntil = 0;   // while set, deaths/damage don't wake the mind; reflexes carry on
 
   constructor(opts: DriveOptions) {
     this.rt = opts.rt;
@@ -154,6 +156,7 @@ export class Drive {
     });
     b.on("damage", (d: { amount: number; health: number }) => {
       const now = Date.now();
+      if (now < this.deathLoopUntil) { this.deathLoopUntil = now + 60_000; return; }   // still under fire: keep quiet
       if (d.health > 10 || now - this.lastDamageItemAt < 5000) return;
       this.lastDamageItemAt = now;
       const attacker = m.lastAttacker && now - m.lastAttacker.at < 3000 ? ` from ${m.lastAttacker.type.replace("minecraft:", "")}#${m.lastAttacker.id}` : "";
@@ -162,6 +165,19 @@ export class Drive {
     b.on("death", () => {
       const where = fmtPos(m.blockPos);
       this.journal.note(`died at ${where}`);
+      const now = Date.now();
+      this.deathTimes.push(now);
+      while (this.deathTimes.length && now - this.deathTimes[0]! > 120_000) this.deathTimes.shift();
+      if (this.deathTimes.length >= 3) {
+        // Dying every few seconds at spawn: the mind can't help in that window and every death was
+        // costing a cancelled turn. Go quiet until the body has stayed alive for a minute.
+        if (now > this.deathLoopUntil) {
+          this.log.warn(`death loop (${this.deathTimes.length} deaths in 2 min): leaving it to the reflexes`);
+          this.push({ kind: "system", priority: 40, text: `You've died ${this.deathTimes.length} times in two minutes at ${where}. Golem will stop waking you for deaths until you've survived a full minute; the reflexes (bunker, self-preservation) are handling it. When you do get a turn: dig in or get away from spawn before anything else.` });
+        }
+        this.deathLoopUntil = now + 60_000;
+        return;
+      }
       this.push({ kind: "death", priority: 95, text: `you died at ${where}. Your items are there if you want them back.` });
     });
     b.on("respawn", () => this.push({ kind: "respawn", priority: 60, text: `respawned at ${fmtPos(m.blockPos)}` }));
