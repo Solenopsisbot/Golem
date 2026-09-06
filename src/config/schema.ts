@@ -53,6 +53,9 @@ export const MindSection = z.object({
 
 export const DriveSection = z.object({
   interrupt_priority: z.number().int().default(80),
+  /** How a high-priority chat item reaches a busy mind: "queue" folds it into the running turn when
+   *  the agent supports prompt queueing (no lost work); "cancel" ends the turn first. Deaths always cancel. */
+  interrupt_mode: z.enum(["queue", "cancel"]).default("queue"),
   idle_wake: DurationString.default("90s"),
   /** Idle wake backs off (doubling) toward this when consecutive goal turns did nothing. */
   idle_wake_max: DurationString.default("10m"),

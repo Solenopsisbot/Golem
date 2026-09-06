@@ -49,6 +49,8 @@ export class Mind {
   /** The profile currently applied ("plan" | "act" | ""), so switches are no-ops when unchanged. */
   profile = "";
   private turn: Promise<TurnResult> | null = null;
+  /** Prompts sent into the running turn; the turn loop waits for one stop per outstanding prompt. */
+  private outstanding = 0;
   private stopping = false;
   private releaseConnection: (() => void) | undefined;
   private connectionDone: Promise<unknown> | undefined;
@@ -61,6 +63,11 @@ export class Mind {
   get busy(): boolean { return this.turn !== null; }
   get sessionId(): string | undefined { return this.session?.sessionId; }
   get supportsImages(): boolean { return !!this.caps.promptCapabilities?.image; }
+  /** The Claude adapter folds a prompt sent mid-turn into the running conversation. */
+  get canQueue(): boolean {
+    const meta = (this.caps._meta ?? {}) as { claudeCode?: { promptQueueing?: boolean } };
+    return !!meta.claudeCode?.promptQueueing;
+  }
 
   /** Spawn the agent, initialise, open the session, set the permission mode. */
   async start(): Promise<void> {
@@ -221,14 +228,18 @@ export class Mind {
     if (!this.session) return Promise.reject(new Error("mind has no session"));
     if (this.turn) return Promise.reject(new Error("a turn is already running"));
     const session = this.session;
+    this.outstanding = 1;
     const run = (async (): Promise<TurnResult> => {
       let text = "";
       const promptP = session.prompt(blocks);
       promptP.catch(() => {}); // surfaced via the stop message below
+      let last: TurnResult | null = null;
       for (;;) {
         const m = await session.nextUpdate();
         if (m.kind === "stop") {
-          return { stopReason: m.stopReason, text, usage: m.response.usage ?? null };
+          last = { stopReason: m.stopReason, text, usage: m.response.usage ?? null };
+          if (--this.outstanding <= 0) return last;
+          continue;   // a queued prompt is still to be answered
         }
         const u = m.update;
         if (u.sessionUpdate === "agent_message_chunk" && u.content.type === "text") text += u.content.text;
@@ -237,6 +248,17 @@ export class Mind {
     })();
     this.turn = run.finally(() => { this.turn = null; });
     return this.turn;
+  }
+
+  /**
+   * Send a prompt into the running turn (Claude Code merges it at the next step). Returns false if
+   * no turn is running or the agent can't queue; the caller should fall back to cancel-and-prompt.
+   */
+  queue(blocks: ContentBlock[]): boolean {
+    if (!this.turn || !this.session || !this.canQueue) return false;
+    this.outstanding++;
+    this.session.prompt(blocks).catch((e) => { this.log.warn(`queued prompt failed: ${(e as Error).message}`); });
+    return true;
   }
 
   /** Ask the agent to stop the current turn; resolves when the turn has ended. */

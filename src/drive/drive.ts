@@ -65,9 +65,24 @@ export class Drive {
   // ---- inputs -----------------------------------------------------------------------
 
   push(item: Omit<InboxItem, "id" | "t">): InboxItem {
+    const a = this.rt.agent;
+    const urgent = this.mind.busy && item.priority >= a.drive.interrupt_priority;
+    const chatty = item.kind === "chat" || item.kind === "whisper" || item.kind === "bridge" || item.kind === "goal";
+    if (urgent && chatty && a.drive.interrupt_mode === "queue") {
+      // Fold the message into the running turn: no cancel, no lost work. It never enters the inbox.
+      const it: InboxItem = { id: -1, t: Date.now(), ...item };
+      const text = `${this.stateHeader()}\n${renderInbox([it])}`;
+      if (this.mind.queue([block.text(text)])) {
+        this.transcript.add("user", text, { queued: true });
+        this.emit({ type: "prompt", text, queued: true });
+        this.emit({ type: "inbox", item: { ...it, queued: true } });
+        this.log.info(`queued ${item.kind} from ${item.from ?? "?"} into the running turn`);
+        return it;
+      }
+    }
     const it = this.inbox.push(item);
     this.emit({ type: "inbox", item: { ...it, image: it.image ? { caption: it.image.caption } : undefined } });
-    if (this.mind.busy && it.priority >= this.rt.agent.drive.interrupt_priority) {
+    if (urgent) {
       this.log.info(`interrupting the mind for ${it.kind} (p${it.priority})`);
       void this.mind.cancel();
     }
