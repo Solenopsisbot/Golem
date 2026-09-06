@@ -36,7 +36,7 @@ import { shellLoop } from "./shell.ts";
 const log = makeLog("golem");
 
 function usage(): never {
-  console.error(`usage: golem <up|body|attach|shell|status|met|talk|prompt|eval|eval-report|replay|gen-types> [agent|task] [-c "cmds"] [--config path] [--no-orient] [--label x] [--keep-session] [--from HH:MM] [--to HH:MM] [--grep re] [--all]`);
+  console.error(`usage: golem <up|body|attach|shell|status|met|talk|prompt|eval|eval-report|cost|replay|gen-types> [agent|task] [-c "cmds"] [--config path] [--no-orient] [--label x] [--keep-session] [--from HH:MM] [--to HH:MM] [--grep re] [--all]`);
   process.exit(2);
 }
 
@@ -46,6 +46,7 @@ function parseArgs(argv: string[]) {
   let oneShot: string | undefined;
   let noOrient = false;
   let label: string | undefined;
+  let hours = 1;
   let keepSession = false;
   let from: string | undefined, to: string | undefined, grep: string | undefined, all = false;
   for (let i = 0; i < argv.length; i++) {
@@ -54,6 +55,7 @@ function parseArgs(argv: string[]) {
     else if (a === "-c") oneShot = argv[++i];
     else if (a === "--no-orient") noOrient = true;
     else if (a === "--label") label = argv[++i];
+    else if (a === "--hours") hours = Number(args[++i] ?? 1);
     else if (a === "--keep-session") keepSession = true;
     else if (a === "--from") from = argv[++i];
     else if (a === "--to") to = argv[++i];
@@ -145,9 +147,7 @@ async function main(): Promise<void> {
     case "cost": {
       // golem cost [agent...] [--hours N]  (default: every agent, last 1h)
       const loaded = loadConfig(config);
-      const hi = rest.indexOf("--hours");
-      const hours = hi >= 0 ? Number(rest[hi + 1] ?? 1) : 1;
-      const names = rest.filter((a, i) => !a.startsWith("--") && i !== hi + 1);
+      const names = rest.filter((a) => !a.startsWith("--"));
       const agents = (names.length ? names : agentNames(loaded)).map((n) => resolveAgent(loaded, n));
       console.log(renderCost(agents.map((a) => summarise(a.name, readTranscript(resolve(a.dataDir, "transcript.jsonl")), hours))));
       return;
