@@ -97,7 +97,7 @@ export class BodyClient {
 
   /** Open the socket, read `welcome`, authenticate, probe capabilities. */
   connect(): Promise<void> {
-    this.closedByUs = false;
+    if (!this.reconnecting) this.closedByUs = false;
     return new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(this.url);
       this.ws = ws;
@@ -180,11 +180,13 @@ export class BodyClient {
     const maxDelay = opts.maxDelayMs ?? 5000;
     let last: unknown;
     for (let i = 0; i < attempts; i++) {
+      if (this.closedByUs) throw new ClefError("NOT_CONNECTED", "closed while reconnecting");
       try { await this.connect(); return; }
       catch (e) {
         last = e;
         opts.onAttempt?.(i + 1, e);
         this.ws?.close();
+        if (this.closedByUs) throw new ClefError("NOT_CONNECTED", "closed while reconnecting");
         if (i < attempts - 1) await new Promise((r) => setTimeout(r, delay));
         delay = Math.min(maxDelay, delay * 2);
       }
@@ -209,6 +211,7 @@ export class BodyClient {
     this.closedByUs = true;
     this.ws?.close();
   }
+  /** connect() clears closedByUs; connectRetry honours it so close() can abort a reconnect loop. */
 
   // ---- calls ----------------------------------------------------------------------
 

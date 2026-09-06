@@ -108,8 +108,10 @@ async function main(): Promise<void> {
       const sessions: AgentSession[] = [];
       const shutdown = async () => {
         log.info("stopping");
-        for (const s of supervisors) s.stop();
+        setTimeout(() => { log.warn("shutdown is taking too long; exiting"); process.exit(0); }, 15_000).unref();
+        // Sessions first (they close their body clients), then the bodies, or the clients reconnect forever.
         await Promise.allSettled(sessions.map((s) => s.stop()));
+        for (const s of supervisors) s.stop();
         for (const name of names) { const agent = resolveAgent(loaded, name); if (!agent.body.attach) killBody(agent); }
         await host.stop().catch(() => {});
         process.exit(0);

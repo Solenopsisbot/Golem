@@ -41,6 +41,7 @@ export class GolemHttpHost {
   readonly port: number;
   private readonly agents = new Map<string, HostedAgent>();
   private readonly sessions = new Map<string, Session>();
+  private readonly streams = new Set<ServerResponse>();
   private server: Server | undefined;
   private readonly log: Logger;
 
@@ -65,7 +66,11 @@ export class GolemHttpHost {
   async stop(): Promise<void> {
     for (const s of this.sessions.values()) { try { await s.transport.close(); } catch { /* fine */ } }
     this.sessions.clear();
-    await new Promise<void>((r) => this.server ? this.server.close(() => r()) : r());
+    // Long-lived SSE responses (the dashboard) would keep close() from ever calling back.
+    for (const res of this.streams) { try { res.end(); } catch { /* fine */ } }
+    this.streams.clear();
+    this.server?.closeAllConnections();
+    await new Promise<void>((r) => { if (!this.server) return r(); const t = setTimeout(r, 2000); this.server.close(() => { clearTimeout(t); r(); }); });
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -188,9 +193,10 @@ export class GolemHttpHost {
   private handleEvents(req: IncomingMessage, res: ServerResponse, hosted: HostedAgent): void {
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
     res.write(`event: hello\ndata: ${JSON.stringify({ t: Date.now(), state: hosted.drive.stateHeader() })}\n\n`);
+    this.streams.add(res);
     const off = hosted.subscribe((ev) => { res.write(`event: ${ev.type}\ndata: ${JSON.stringify(ev)}\n\n`); });
     const ping = setInterval(() => res.write(": ping\n\n"), 15_000);
-    req.on("close", () => { off(); clearInterval(ping); });
+    req.on("close", () => { off(); clearInterval(ping); this.streams.delete(res); });
   }
 }
 
