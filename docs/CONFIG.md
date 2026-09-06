@@ -24,14 +24,20 @@ args = ["-y", "@agentclientprotocol/claude-agent-acp"]
 env = {}                       # extra env for the agent process (ANTHROPIC_API_KEY, CLAUDE_CONFIG_DIR, ...)
 permission_mode = "bypass"     # requested session mode; Golem still answers escalations by policy
 allow_shell = true
-model = ""                     # agent-specific config option, if it advertises one
+model = ""                     # legacy single model (unused when models.* are set)
 effort = ""
+# Two-tier routing. Values are substrings matched against what the agent advertises; the newest
+# version wins ("opus" -> claude-opus-5 over claude-opus-4-8). Empty = leave the agent's default.
+models.plan = { model = "fable", effort = "high" }   # owner asks, deaths, goal changes, failures, first turn, plan_next, every plan_every turns
+models.act  = { model = "opus",  effort = "" }       # everything else
 budget.tokens_per_hour = 2_000_000
 budget.turns_per_hour = 120
 
 [drive]
 interrupt_priority = 80        # inbox items at/above this cancel the current turn (death 95, low-hp damage 85, owner chat 80, self_preservation 65, trusted 55, addressed 50, other chat 40, joins 20, goal tick 10)
 idle_wake = "90s"              # cadence for "continue toward your goal" when a goal is set and the inbox is empty
+idle_wake_max = "10m"          # the cadence doubles toward this while goal turns make no tool calls; resets on real input
+plan_every = 12                # force a planning-model turn at least every N turns (0 = never by count)
 sleep_when_idle = true         # no goal + empty inbox = no prompts at all
 cancel_runs_on_turn_cancel = false
 inbox_max = 40                 # older items get summarised into one line

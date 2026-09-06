@@ -35,6 +35,10 @@ bin/golem shell Clay -c 'eval say "hi"'          # one snippet per -c segment: t
 
 Scripts the agent writes live in `data/<agent>/workspace/shem/`; run traces in `data/<agent>/workspace/runs/`. The shipped library is `shem/lib/` in this repo (mounted read-only as `lib/...`), Shem reflexes in `shem/reflexes/`.
 
+## The dashboard
+
+`golem up` prints a URL like `http://127.0.0.1:8770/agents/Clay/dash?token=…`. One page per agent: the state line, the live transcript (prompts, agent text, tool calls with results, turn ends with model and tokens), the inbox, runs, reflex toggles, the latest picture (or take a new one), a chat box that speaks as the first owner (fast paths like `goal …` and `met` work there too), and a met button. The page remembers the token in localStorage after the first open. No build step: it's `src/dashboard/index.html` over the bridge's SSE and JSON routes.
+
 ## Watching a mind
 
 `data/<agent>/transcript.jsonl` has every prompt Golem sent, every Golem tool call with its result, and the agent's text. `data/<agent>/mind.log` is the ACP adapter's stderr. `data/<agent>/workspace/` is what the agent sees: read `AGENTS.md` there to see the orientation it got. The bridge's SSE stream (`GET /agents/<name>/events`) carries the same in real time; `golem talk` is a thin client for it.

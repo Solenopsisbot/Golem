@@ -12,6 +12,8 @@
 | 6 | **Skills are `.shem` files in the agent's workspace** | Files are what coding agents are good at. Golem indexes them and regenerates the workspace orientation doc. |
 | 7 | **One body per JVM, one mind per body, one workspace per agent** | Mirrors Clef's fleet model and keeps blast radius small. |
 | 8 | **Owner chat interrupts the mind** (priority 80, same as the interrupt threshold) | A cancelled ACP turn keeps its session history, so responsiveness costs only the in-flight tool call. Everything below the threshold waits for the current turn. |
+| 10 | **Two model tiers per agent** | Every tool call is a full-context round trip, so the cost is call count, not prompt size; the *quality* lever is which model runs the turns that decide things. Planning turns (owner asks, deaths, goal changes, failures, `plan_next`, every N turns) run the strong model; routine survival runs the cheaper one. Switched with ACP `session/set_config_option`, same session, no context loss. |
+| 11 | **The mind is told that calls are the expensive thing** | Orientation says: two actions in a row go in one `shem_eval`; a pattern used twice becomes a script. In the field test 28 `shem_eval` calls carried 90% of the tool time. |
 | 9 | **Dev world is peaceful by default** | Nights on a normal-difficulty world killed the unarmed bot every two minutes and buried the mind in death interrupts. `MC_DIFFICULTY=normal` for survival tests. |
 
 ## The pieces
@@ -105,5 +107,5 @@ The ACP adapter for Claude Code advertises `promptCapabilities.image = true`, so
 |---|---|
 | Golem dev server | `127.0.0.1:25566` (`data/server/`) |
 | Clay's body control plane | `127.0.0.1:9731` (`data/Clay/clef/`) |
-| Golem MCP / bridge HTTP | `127.0.0.1:8770` (M2) |
+| Golem MCP / bridge HTTP / dashboard | `127.0.0.1:8770`; dashboard at `/agents/<name>/dash?token=…` |
 | MezzoSopranoClef's own e2e | `25565` and `8731`, untouched |

@@ -21,11 +21,14 @@ Done: lexer, parser, checker (unknown names/arity/named args, registry-validated
 Open: `smelt`, `trade`, `sleep`, `dig_down`, `tunnel`, `dm` are declared but stubbed; the shipped TS reflexes are not yet ported to Shem; no `test` blocks yet.
 Lexer, parser, checker (with registry validation from `minecraft-data`), interpreter, run manager, `shem_*` tools, library index and orientation regeneration, reflexes ported from TS to `.shem`. Standard library. The mind writes a script, checks it, runs it, keeps it.
 
+## Field test and harness pass (2026-09-06, after M3)
+One hour on normal difficulty with a standing goal: stone tools, a dug shelter, iron smelted, iron pickaxe and sword, base sealed and lit before night, one death to a drowned and a successful corpse run, hunting for food, four self-written scripts, zero tool errors, two `eat` failures (fixed: movement interrupts item use). Harness changes from it: two-tier model routing with `plan_next`, adaptive idle wake, compact run results, cosmetic reflexes kept out of the inbox, failing reflexes back off, session resume across restarts. The dashboard (first half of M5) shipped here.
+
 ## M4: Fleet and comms
 Multiple agents in one process, fleet spawning from the launcher jar, the agent bus, conversations, peering between Golem processes, world index shared or per-agent by config.
 
 ## M5: Proof
-Eval task harness (`tasks/*.json`, headless server in CI, success predicates), a small dashboard (transcript, tool calls, screenshot stream, runs, per-agent), `golem replay`. Publish.
+Eval task harness (`tasks/*.json`, headless server in CI, success predicates), `golem replay`, dashboard polish (multi-agent view, run traces inline). Publish.
 
 ## Not scheduled, wanted
 Top-down map, annotated screenshots, blueprints and `build`, Ayusami persona bridge, voice, cheap-model helpers via Logfare, session resume across restarts for non-Claude agents.
