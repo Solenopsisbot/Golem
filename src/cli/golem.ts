@@ -108,7 +108,7 @@ async function main(): Promise<void> {
       if (!names.length) { log.error("no agents in golem.toml"); process.exit(1); }
       const host = new GolemHttpHost(loaded.config.fleet.mcp_bind);
       await host.start();
-      const bus = new AgentBus({ maxTurns: loaded.config.comms.conversations.max_turns, cooldownMs: parseDuration(loaded.config.comms.conversations.cooldown) });
+      const bus = new AgentBus({ maxTurns: loaded.config.comms.conversations.max_turns, cooldownMs: parseDuration(loaded.config.comms.conversations.cooldown), mirrorInGame: loaded.config.comms.agents === "both" });
       const supervisors: Supervisor[] = [];
       const sessions: AgentSession[] = [];
       const shutdown = async () => {

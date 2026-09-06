@@ -55,7 +55,8 @@ trusted = []                   # get answered, can't command
 ignored = []
 
 [comms]
-agents = "bus"                 # bus | chat | both  (only bus is implemented; dm goes agent-to-agent inside one golem up)
+agents = "bus"                 # bus: dms stay inside Golem. both: every dm is also said in public chat as "<to>: <text>" for players to watch. (chat-only is not implemented.)
+                               # Golems never hear each other's in-game chat while a bus exists; they talk over the bus.
 share_world = true             # one chest/place index for the fleet (data/shared/world), linked into every workspace as world/shared
 conversations.max_turns = 12
 conversations.cooldown = "2m"

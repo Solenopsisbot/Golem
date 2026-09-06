@@ -20,3 +20,16 @@ test("bus delivers, caps pairs, tells both sides, and resets after the cooldown"
   assert.match(bus.roster("Clay"), /^Flint: Flint ok$/);
   return new Promise<void>((r) => setTimeout(() => { assert.equal(bus.send("Clay", "Flint", "again").remaining, 2); r(); }, 60));
 });
+
+test("mirrorInGame says each dm in public chat as the sender, addressed to the recipient", async () => {
+  const bus = new AgentBus({ maxTurns: 5, cooldownMs: 1000, mirrorInGame: true });
+  const said: string[] = [];
+  const a: BusMessage[] = [], b: BusMessage[] = [];
+  bus.register({ ...peer("Clay", a), say: async (t) => { said.push(t); } });
+  bus.register(peer("Flint", b));
+  bus.send("Clay", "Flint", "shelter's lit");
+  bus.send("Flint", "Clay", "on my way");   // Flint has no say(): silently skipped
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(said, ["Flint: shelter's lit"]);
+  assert.equal(b.length, 1);
+});

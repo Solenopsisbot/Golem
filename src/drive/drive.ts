@@ -148,6 +148,8 @@ export class Drive {
     const m = this.rt.mirror;
     const a = this.rt.agent;
     b.on("chat", (d: { text: string; sender?: string; kind: string }) => {
+      // Fleet-mates talk over the bus; their in-game lines (including mirrored dms) are for players.
+      if (d.sender && d.sender !== a.name && this.bus?.has(d.sender)) return;
       const r = routeChat(a, d);
       if (r.action === "drop") return;
       if (r.action === "fast") { void this.handleFast(r.command, d.sender ?? "?"); return; }

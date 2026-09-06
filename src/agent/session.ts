@@ -66,7 +66,7 @@ export class AgentSession {
       onExit: () => s.onMindExit(),
     });
     s.drive = new Drive({ rt: s.rt, mind: s.mind, log: s.log.child("drive"), transcript: s.transcript, journal: s.journal, emit, bus: opts.bus });
-    if (opts.bus) s.unregisterBus = opts.bus.register({ name: agent.name, deliver: (m) => s.drive.deliverFromBus(m), state: () => s.drive.stateHeader().replace(/^\[state\]\s*/, "") });
+    if (opts.bus) s.unregisterBus = opts.bus.register({ name: agent.name, deliver: (m) => s.drive.deliverFromBus(m), state: () => s.drive.stateHeader().replace(/^\[state\]\s*/, ""), say: (text) => s.rt.p.say(text) });
     s.rt.drive = s.drive;
     host.register(agent.name, { rt: s.rt, drive: s.drive, shem, token: tokens.mcp, transcriptPath: resolve(agent.dataDir, "transcript.jsonl"), subscribe: (l) => { s.listeners.add(l); return () => s.listeners.delete(l); } });
     shem.runs.onEnd(({ type, run }) => {

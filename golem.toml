@@ -30,3 +30,6 @@ persona = "personas/clay.md"
 name = "Flint"
 persona = "personas/flint.md"
 reflexes.on = ["auto_respawn", "bunker", "self_preservation", "self_defense", "unstuck", "auto_eat", "item_collecting"]
+
+[comms]
+agents = "both"   # bus + public chat mirror so players can watch the golems talk

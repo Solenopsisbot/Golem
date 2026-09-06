@@ -11,20 +11,29 @@ export interface BusPeer {
   deliver(msg: BusMessage): void;
   /** One-line state for `agents()`. */
   state(): string;
+  /** Say something in game as this agent (used to mirror bus traffic for spectators). */
+  say?(text: string): Promise<unknown>;
 }
 
-export interface BusOptions { maxTurns?: number; cooldownMs?: number }
+export interface BusOptions {
+  maxTurns?: number;
+  cooldownMs?: number;
+  /** comms.agents = "both": every dm is also said in public chat as "<to>: <text>" so players can watch. */
+  mirrorInGame?: boolean;
+}
 
 export class AgentBus {
   private readonly peers = new Map<string, BusPeer>();
   private readonly pairs = new Map<string, { count: number; windowStart: number; paused: boolean }>();
   private readonly maxTurns: number;
   private readonly cooldownMs: number;
+  readonly mirrorInGame: boolean;
   readonly log: BusMessage[] = [];
 
   constructor(opts: BusOptions = {}) {
     this.maxTurns = opts.maxTurns ?? 12;
     this.cooldownMs = opts.cooldownMs ?? parseDuration("2m");
+    this.mirrorInGame = !!opts.mirrorInGame;
   }
 
   register(peer: BusPeer): () => void {
@@ -69,6 +78,7 @@ export class AgentBus {
     this.log.push(msg);
     if (this.log.length > 500) this.log.shift();
     peer.deliver(msg);
+    if (this.mirrorInGame) void this.peers.get(from)?.say?.(`${to}: ${text}`)?.catch(() => { /* chat is best-effort */ });
     const remaining = this.maxTurns - p.count;
     if (remaining === 0) {
       // Tell both sides once so neither waits on a reply that can't come.

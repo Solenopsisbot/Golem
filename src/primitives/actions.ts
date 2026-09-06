@@ -228,6 +228,8 @@ export async function respawn(ctx: Ctx): Promise<void> {
   await until(() => !ctx.mirror.dead && ctx.mirror.health > 0, { timeoutMs: 10_000, intervalMs: 250, what: "respawn", token: ctx.token }).catch(() => {});
 }
 
+const NO_STORAGE = new Set(["crafting_table", "enchanting_table", "anvil", "chipped_anvil", "damaged_anvil", "grindstone", "stonecutter", "loom", "cartography_table", "smithing_table", "lectern", "beacon"]);
+
 /** Open a container block and return its contents. */
 export async function openContainer(ctx: Ctx, p: Pos): Promise<ContainerResult> {
   return ctx.activity.run(`open ${fmtPos(p)}`, async () => {
@@ -241,7 +243,8 @@ export async function openContainer(ctx: Ctx, p: Pos): Promise<ContainerResult> 
     catch (e) { throw fromClef(e, "container"); }
     const kind = await blockAt(ctx, p).then((b) => b.short).catch(() => undefined);
     lastOpened = { pos: p, handler: c.handler, kind };
-    try { recordChest(ctx.agent, p, ctx.mirror.dimension, c.handler, c.slots, { kind }); } catch { /* index is best-effort */ }
+    // Work stations open a screen too, but they hold nothing worth indexing.
+    if (!kind || !NO_STORAGE.has(kind)) { try { recordChest(ctx.agent, p, ctx.mirror.dimension, c.handler, c.slots, { kind }); } catch { /* index is best-effort */ } }
     return c;
   });
 }
@@ -251,6 +254,7 @@ let lastOpened: { pos: Pos; handler: string; kind?: string } | null = null;
 async function reindexOpen(ctx: Ctx): Promise<void> {
   if (!lastOpened || !ctx.mirror.screen) return;
   try {
+    if (lastOpened.kind && NO_STORAGE.has(lastOpened.kind)) return;
     const c = (await ctx.body.call("container")) as ContainerResult;
     recordChest(ctx.agent, lastOpened.pos, ctx.mirror.dimension, c.handler, c.slots, { kind: lastOpened.kind });
   } catch { /* best-effort */ }
