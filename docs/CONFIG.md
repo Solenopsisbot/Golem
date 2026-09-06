@@ -55,7 +55,7 @@ trusted = []                   # get answered, can't command
 ignored = []
 
 [comms]
-agents = "bus"                 # bus | chat | both
+agents = "bus"                 # bus | chat | both  (only bus is implemented; dm goes agent-to-agent inside one golem up)
 conversations.max_turns = 12
 conversations.cooldown = "2m"
 fleets = []                    # other Golem processes to peer with: ["ws://cytonic:8771"]

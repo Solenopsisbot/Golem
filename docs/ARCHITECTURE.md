@@ -63,7 +63,7 @@ The per-agent Golem MCP server: one-shot tools for perception and action, `shem_
 
 ### comms/
 - **Players.** `players.owners` can command and toggle; `trusted` get answered; `ignored` are dropped. `chat.listen` decides whether the bot hears everything, only when addressed (`Kiko`, `@Kiko`, whisper), or only owners.
-- **Agents.** A message bus inside the Golem process (and over WebSocket between Golem processes) so bots can talk without spamming server chat. `comms.agents = bus | chat | both`; `both` mirrors bus messages as in-game whispers so players can watch. Conversations have explicit start/end and a max-turn cap so two bots don't loop forever agreeing with each other.
+- **Agents.** A message bus inside the Golem process (`src/comms/bus.ts`; cross-process peering is planned) so bots can talk without spamming server chat. `dm` delivers an `agent` inbox item to the recipient; `agents` lists the fleet with state lines. Pairs are capped at `comms.conversations.max_turns` per `cooldown` window and both sides are told when a conversation pauses, so two bots don't loop forever agreeing with each other.
 
 ### world/
 Golem-maintained knowledge the mind shouldn't have to rediscover: a **chest index** (every container opened, contents on close, position, dimension), deaths (where, why, what was carried), beds and portals seen, named places, and a daily **journal** digest of events. All written as JSON or markdown into the workspace so the agent can read and grep it.

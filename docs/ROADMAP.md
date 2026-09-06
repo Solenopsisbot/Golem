@@ -24,7 +24,9 @@ Lexer, parser, checker (with registry validation from `minecraft-data`), interpr
 ## Field test and harness pass (2026-09-06, after M3)
 One hour on normal difficulty with a standing goal: stone tools, a dug shelter, iron smelted, iron pickaxe and sword, base sealed and lit before night, one death to a drowned and a successful corpse run, hunting for food, four self-written scripts, zero tool errors, two `eat` failures (fixed: movement interrupts item use). Harness changes from it: two-tier model routing with `plan_next`, adaptive idle wake, compact run results, cosmetic reflexes kept out of the inbox, failing reflexes back off, session resume across restarts. The dashboard (first half of M5) shipped here.
 
-## M4: Fleet and comms
+## M4: Fleet and comms (in progress; bus landed 2026-09-06)
+Done: the in-process agent bus (`dm`, `agents`, Shem `dm`/`agents`), per-pair conversation caps with both sides told when a conversation pauses, agent messages as `agent` inbox items, a second persona (Flint) in the dev fleet. Open: peering between Golem processes (`comms.fleets`), `comms.agents = both` mirroring to in-game whispers, shared world knowledge by config, a task board.
+
 Multiple agents in one process, fleet spawning from the launcher jar, the agent bus, conversations, peering between Golem processes, world index shared or per-agent by config.
 
 ## M5: Proof (in progress)
