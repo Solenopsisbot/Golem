@@ -12,7 +12,7 @@ base_port = 9741
 max_heap = "1024m"
 
 [players]
-owners = ["Solenopsisbot"]
+owners = ["owner"]            # the eval runner sends goals as this player
 
 [[agents]]
 name = "Tester"

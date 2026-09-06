@@ -90,7 +90,7 @@ The ACP adapter for Claude Code advertises `promptCapabilities.image = true`, so
 ## Process and hardware
 
 - One `golem` process per fleet; N agents inside it; N Clef JVMs beside it; N agent subprocesses beside those.
-- Clef needs ~768 MB heap per body. ladybug (24 GB) comfortably runs a few for dev. cytonic (x86, 32 GB) is the fleet host. astral cannot run bodies (aarch64, no LWJGL natives). vega is off limits.
+- Clef needs about 1 GB of heap per body. A 24 GB laptop comfortably runs a few for dev; a fleet wants a box with 8 GB or so per pair of bodies. linux-arm64 cannot run bodies (no LWJGL natives).
 - The MCP server binds `127.0.0.1` and each agent gets its own bearer token so a mind can only drive its own body.
 - `met` is wired at three levels: MCP tool, owner chat fast path, and `golem met <agent|all>` on the CLI.
 

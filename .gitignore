@@ -4,3 +4,6 @@ data/
 *.log
 .DS_Store
 .env
+
+# your fleet: addresses, owners, attach lines. Copy golem.example.toml to golem.toml.
+golem.toml

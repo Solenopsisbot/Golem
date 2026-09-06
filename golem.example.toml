@@ -1,0 +1,36 @@
+# Golem fleet config. Copy to golem.toml (ignored by git) and edit. Every key: docs/CONFIG.md.
+
+[fleet]
+name = "dev"
+data_dir = "./data"
+mcp_bind = "127.0.0.1:8770"
+
+[clef]
+launcher = "../MezzoSopranoClef/launcher/build/libs/mezzosopranoclef-launcher-0.1.0.jar"
+server = "127.0.0.1:25566"      # scripts/dev-server.sh runs a local server here
+auth = "offline"
+base_port = 9731                 # agent N gets base_port + N for its body's control port
+max_heap = "1024m"
+
+[players]
+owners = ["YourMinecraftName"]  # can command, toggle reflexes, set goals, stop a golem with "met"
+
+[chat]
+listen = "addressed"             # addressed | owners | all
+speech = "explicit"              # explicit: the mind speaks only via say/dm
+
+[reflexes]
+default_on = ["auto_respawn", "bunker", "self_preservation", "unstuck", "auto_eat", "item_collecting", "idle_staring"]
+
+[[agents]]
+name = "Clay"
+persona = "personas/clay.md"
+# body.attach = "<host>:9731"    # run the body elsewhere (docs/DEPLOY.md); without this line golem up launches it locally
+
+[[agents]]
+name = "Flint"
+persona = "personas/flint.md"
+reflexes.on = ["auto_respawn", "bunker", "self_preservation", "self_defense", "unstuck", "auto_eat", "item_collecting"]
+
+[comms]
+agents = "both"                  # bus: golems talk privately; both: every dm is also said in chat so players can watch

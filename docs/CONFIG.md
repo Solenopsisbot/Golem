@@ -61,7 +61,7 @@ agents = "bus"                 # bus: dms stay inside Golem. both: every dm is a
 share_world = true             # one chest/place index for the fleet (data/shared/world), linked into every workspace as world/shared
 conversations.max_turns = 12
 conversations.cooldown = "2m"
-fleets = []                    # other Golem processes to peer with: ["ws://cytonic:8771"]
+fleets = []                    # other Golem processes to peer with: ["ws://other-host:8771"]
 
 [etiquette]
 pvp = "defend"                 # never | defend | always

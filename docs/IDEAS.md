@@ -18,7 +18,7 @@ The answer to "what else should we incorporate". Top is "do this in the core", b
 14. **Ayusami bridge.** Same persona files for Kiko, Amelia and June; a small bus so the Discord side knows what the Minecraft side is doing ("Kiko is mining, back in a bit") and vice versa. A character who exists in two places is the computer-friends project in one feature. Your call whether Golem should know about Ayusami or the other way round.
 15. **Cheap helpers via Logfare.** "Is this chat line addressed to me?" and "summarise this inbox" don't need the big model. Route those to a Logfare model, keep the ACP agent for thinking. Dogfooding, too.
 16. **Squad control.** One mind, several bodies, each with its own Shem run queue. Leader assigns scripts to bodies over the bus. Later, but the architecture allows it because a body is just a client and a run queue.
-17. **Peer fleets.** Golem processes on ladybug and cytonic peering over WebSocket so bots on different machines share a bus and, optionally, a world index.
-18. **Voice.** Ayusami already has a voice pipeline and LiveKit lives on astral. A bot that talks in proximity chat is a plugin away once the rest works.
+17. **Peer fleets.** Golem processes on two machines peering over WebSocket so bots on different machines share a bus and, optionally, a world index.
+18. **Voice.** A voice pipeline (LiveKit) already exists on the persona side. A bot that talks in proximity chat is a plugin away once the rest works.
 19. **Server-side companion mod (optional).** For servers you own: precise block-placed-by-whom data for grief avoidance, cheap teleport for eval setups, and a way to ask the server what a chest contains without opening it. Never required.
 20. **Dashboard.** Transcript, tool calls, screenshot stream, run traces, inbox, per-agent tabs. Clef's own dashboard covers the body; this covers the mind. Keep it small and server-rendered.

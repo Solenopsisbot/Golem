@@ -22,6 +22,5 @@ TypeScript on Node 26 (native type stripping) or Bun 1.3. Dependencies kept mini
 
 ## Where things run
 
-- Bodies (Clef JVMs, ~768 MB heap each) run on **ladybug** for dev and **cytonic** for a fleet. Not astral: it's aarch64 and Mojang ships no linux-arm64 LWJGL natives. Not vega: it hosts Logfare.
-- Minds run wherever the agent CLI is logged in (ladybug).
-- Golem core runs next to the minds.
+- Bodies (Clef JVMs, ~1 GB heap each) run on any x86-64 machine with Java 21; not on linux-arm64, where Mojang ships no LWJGL natives. `docs/DEPLOY.md` covers running them away from the mind.
+- Minds run wherever the agent CLI is logged in; the Golem process runs next to the minds and attaches to bodies over their control port.
