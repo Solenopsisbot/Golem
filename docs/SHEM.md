@@ -268,3 +268,7 @@ type        = IDENT [ "<" type { "," type } ">" ] [ "?" ] ;
 ## Saving from a snippet
 
 The `shem_eval` tool takes `save: "shem/name.shem"`: the snippet is checked, written as a script file (bare statements are wrapped as `script main()`), the library index in the orientation is regenerated, and the saved file is run. A new script therefore costs one tool call. Files under `shem/lib/` can't be written this way. `shem_run` also checks before running, so a separate `shem_check` is only for diagnostics without execution.
+
+## What comes back
+
+A foreground run returns its status, the value it `return`ed (lists capped at 40 items, maps at 30 entries), its `log` lines, and an `[after]` line: position, health, held item, the inventory delta since the run started ("+9 melon_slice, -1 bone_meal"), and hostiles within 16. Background runs report the same into the inbox when they end. The point is that acting and observing are one call.

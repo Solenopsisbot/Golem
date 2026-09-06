@@ -2,6 +2,8 @@
 // and exposes the operations the MCP tools and the shell use.
 import type { AgentRuntime } from "../agent/runtime.ts";
 import { GolemError } from "../primitives/errors.ts";
+import { fmtPos } from "../util/geom.ts";
+import { countItems, inventoryDelta } from "../world/delta.ts";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { BUILTINS, BUILTIN_BY_NAME, EVENTS, GETTERS, GETTER_BY_NAME, signature } from "./builtins.ts";
@@ -92,9 +94,35 @@ export class ShemEngine {
   }
 
   /** Wait for a run to end (bounded). Returns its description. */
-  async wait(run: Run, timeoutMs: number): Promise<string> {
+  /** Inventory counts right now, for the delta shown after a run. Bounded; empty on failure. */
+  async snapshot(): Promise<Record<string, number>> {
+    const inv = await Promise.race([this.rt.p.inventory().catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 800))]);
+    return inv ? countItems(inv.items) : {};
+  }
+
+  /**
+   * Wait for a run, then describe it with one line of what the world looks like now: position,
+   * health, held item, what the inventory gained or lost since `before`, hostiles in reach. The
+   * second call a mind used to spend "looking at what it did" is folded into the first.
+   */
+  async wait(run: Run, timeoutMs: number, before?: Record<string, number>): Promise<string> {
     await Promise.race([run.promise.catch(() => {}), new Promise((r) => setTimeout(r, timeoutMs))]);
-    return describeRun(run);
+    const text = describeRun(run);
+    if (!before) return text;
+    return `${text}\n${await this.observe(before)}`;
+  }
+
+  async observe(before: Record<string, number>): Promise<string> {
+    const m = this.rt.mirror;
+    const [after, threats] = await Promise.all([
+      this.snapshot(),
+      Promise.race([this.rt.p.threats(16).catch(() => []), new Promise<never[]>((r) => setTimeout(() => r([]), 800))]),
+    ]);
+    const parts = [`now ${fmtPos(m.blockPos)}`, `hp ${m.health.toFixed(0)} food ${m.food}`, `holding ${m.heldItem.replace("minecraft:", "").replace(/ x\d+$/, "") || "nothing"}`];
+    const delta = inventoryDelta(before, after);
+    if (delta) parts.push(`inv ${delta}`);
+    if (threats.length) parts.push(`hostiles(16): ${threats.slice(0, 4).map((t) => `${t.type.replace("minecraft:", "")} ${Math.round(t.distance)}m`).join(", ")}${threats.length > 4 ? ` +${threats.length - 4}` : ""}`);
+    return `[after] ${parts.join(" | ")}`;
   }
 
   list(): string { return this.library.index(); }

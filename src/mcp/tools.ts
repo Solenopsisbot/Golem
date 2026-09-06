@@ -117,11 +117,12 @@ export const SHEM_TOOLS: ToolDef[] = [
   def({ name: "shem_run", description: "Check and run a script from a file in one call. `path` is the file (shem/mine.shem, or lib/wood for the standard library); `script` is the script name inside it (required when the file has several). Runs the checker first and returns its diagnostics instead of running if there are errors. With background=true Golem tells you in your inbox when the run ends; don't poll it.", input: { path: z.string(), script: z.string().optional(), params: paramsShape, priority: z.number().int().min(0).max(100).default(50), interrupt: z.boolean().default(false), background: z.boolean().default(false), timeout_s: z.number().min(1).max(3600).default(120) },
     async run(a, tc) {
       const e = needShem(tc);
+      const before = a.background ? undefined : await e.snapshot();
       const run = e.run(a.path, a.script, (a.params ?? {}) as Record<string, never>, { priority: a.priority, interrupt: a.interrupt, background: a.background, timeoutMs: Math.max(a.timeout_s, 600) * 1000 });
       if (a.background) return ok(`started ${run.id} (${run.label}) in the background; you'll get an inbox item when it ends, no need to poll`);
-      return ok(await e.wait(run, a.timeout_s * 1000));
+      return ok(await e.wait(run, a.timeout_s * 1000, before));
     } }),
-  def({ name: "shem_eval", description: "Run a Shem snippet (statements, or a whole file with script declarations) in one call. Pass `save` (e.g. shem/harvest.shem) to also keep it as a script: the snippet is checked, written to that file, and the saved file is run, so a new script costs one call instead of write + check + run. Bare statements are saved wrapped as `script main()`. Put say/dm/block_at/inventory checks inside the snippet rather than making separate calls.", input: { save: z.string().optional(),  code: z.string(), params: paramsShape, timeout_s: z.number().min(1).max(3600).default(120), background: z.boolean().default(false) },
+  def({ name: "shem_eval", description: "Run a Shem snippet (statements, or a whole file with script declarations) in one call. Pass `save` (e.g. shem/harvest.shem) to also keep it as a script: the snippet is checked, written to that file, and the saved file is run, so a new script costs one call instead of write + check + run. Bare statements are saved wrapped as `script main()`. Put say/dm/block_at/inventory checks inside the snippet rather than making separate calls. The result ends with an [after] line: where you are, health, held item, what the inventory gained or lost, hostiles in reach. `return` a value (number, list, map, record) to get data back; `log` lines come back too.", input: { save: z.string().optional(),  code: z.string(), params: paramsShape, timeout_s: z.number().min(1).max(3600).default(120), background: z.boolean().default(false) },
     async run(a, tc) {
       const e = needShem(tc);
       if (a.save) {
@@ -130,13 +131,15 @@ export const SHEM_TOOLS: ToolDef[] = [
         const check = e.checkSource(src);
         if (check.diagnostics.some((d) => d.severity === "error")) return ok(`not saved: ${check.text}`);
         e.saveScript(tc.rt.agent.workspaceDir, rel, src);
+        const before = a.background ? undefined : await e.snapshot();
         const run = e.run(rel, undefined, (a.params ?? {}) as Record<string, never>, { background: a.background, timeoutMs: Math.max(a.timeout_s, 600) * 1000 });
         if (a.background) return ok(`saved ${rel}; started ${run.id} in the background; you'll get an inbox item when it ends`);
-        return ok(`saved ${rel}\n${await e.wait(run, a.timeout_s * 1000)}`);
+        return ok(`saved ${rel}\n${await e.wait(run, a.timeout_s * 1000, before)}`);
       }
+      const before = a.background ? undefined : await e.snapshot();
       const run = e.eval(a.code, (a.params ?? {}) as Record<string, never>, { background: a.background, timeoutMs: Math.max(a.timeout_s, 600) * 1000 });
       if (a.background) return ok(`started ${run.id} in the background; you'll get an inbox item when it ends, no need to poll`);
-      return ok(await e.wait(run, a.timeout_s * 1000));
+      return ok(await e.wait(run, a.timeout_s * 1000, before));
     } }),
   def({ name: "shem_status", description: "Status and trace tail of a run. Rarely needed: foreground runs return their result, background runs report into your inbox when they end.", input: { run: z.string() },
     async run(a, tc) { const r = needShem(tc).runs.get(a.run); if (!r) throw new GolemError("not_found", `no run ${a.run}`); return ok(describeRun(r, 30, true)); } }),

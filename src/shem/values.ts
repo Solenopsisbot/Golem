@@ -82,7 +82,8 @@ export function show(v: Value): string {
   if (v === null) return "none";
   if (typeof v === "string") return v;
   if (typeof v === "number") return Number.isInteger(v) ? String(v) : v.toFixed(2);
-  if (Array.isArray(v)) return `[${v.map(show).join(", ")}]`;
+  if (Array.isArray(v)) return v.length > 40 ? `[${v.slice(0, 40).map(show).join(", ")}, +${v.length - 40} more]` : `[${v.map(show).join(", ")}]`;
+  if (v instanceof ShemMap) { const es = [...v.entries()]; return `{${es.slice(0, 30).map(([k, x]) => `${show(k)}: ${show(x)}`).join(", ")}${es.length > 30 ? `, +${es.length - 30} more` : ""}}`; }
   if (typeof v === "object" && !(v instanceof Dur) && !(v instanceof Vec3) && !(v instanceof ShemMap) && !(v instanceof Closure) && !(v instanceof RunHandle)) {
     const r = v as Record_;
     if (typeof r.type === "string" && typeof r.id === "number") return `${String(r.type).replace("minecraft:", "")}#${r.id}`;
