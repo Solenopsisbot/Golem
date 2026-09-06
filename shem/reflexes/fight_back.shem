@@ -1,0 +1,6 @@
+/// Hit back at whatever just hurt you, if it's within reach (the Shem twin of the built-in `self_defense`). Off by default.
+reflex fight_back priority 80 on damage(amount, hp, source) when hp > 6 and threats(radius: 4).length > 0 {
+  let t = threats(radius: 4).first
+  let r = attack(t, timeout: 10s)
+  log "fought ${t.short}: ${r.killed ? "killed" : "stopped"} after ${r.hits} hits"
+}

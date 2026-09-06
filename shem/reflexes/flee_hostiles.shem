@@ -1,0 +1,6 @@
+/// Run from hostile mobs before they get close (the Shem twin of the built-in `cowardice`). Off by default.
+reflex flee_hostiles priority 75 on tick when threats(radius: 8).length > 0 {
+  let t = threats(radius: 8)
+  let r = flee(t, dist: 16)
+  log "fled ${t.length} threat(s) to ${r.pos}"
+}

@@ -112,6 +112,7 @@ export class ShemEngine {
       const { program } = this.library.program(lf);
       const host = (this.interpreter as unknown as { host: import("./interpreter.ts").Host }).host;
       for (const decl of lf.file.reflexes) {
+        if (engine.list().some((r) => r.name === decl.name)) { this.rt.log.warn(`reflex ${decl.name} in ${lf.rel} clashes with an existing reflex; skipped (rename it)`); continue; }
         const interp = this.interpreter;
         const makeRun = (token: CancelToken): RunCtx => ({
           id: `reflex:${decl.name}`, token, log: (l) => this.rt.log.debug(`[${decl.name}] ${l}`), trace: () => {},
