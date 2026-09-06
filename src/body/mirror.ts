@@ -32,6 +32,7 @@ export class Mirror {
 
   lastTickAt = 0;
   lastStatusAt = 0;
+  lastRespawnAt = 0;
   lastDamageAt = 0;
   lastMoveAt = Date.now();
   /** Set by nav.done / nav.failed events when the body has them (CLEF-CHANGES #7). */
@@ -111,7 +112,7 @@ export class Mirror {
       this.changed("damage");
     });
     b.on("death", () => { this.dead = true; this.changed("death"); });
-    b.on("respawn", () => { this.dead = false; this.changed("respawn"); });
+    b.on("respawn", () => { this.dead = false; this.lastRespawnAt = Date.now(); this.changed("respawn"); });
     b.on("connected", () => { this.connected = true; this.changed("connected"); });
     b.on("disconnected", () => {
       this.connected = false; this.inWorld = false; this.navActive = false; this.screen = null;
