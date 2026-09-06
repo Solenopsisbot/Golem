@@ -81,8 +81,9 @@ See [docs/SHEM.md](docs/SHEM.md) for the full spec and grammar.
 - **Java 21** for the body (each body is a JVM process, about 1 GB of heap)
 - **MezzoSopranoClef launcher jar.** The body is a headless Minecraft client from
   the [MezzoSopranoClef](https://github.com/Solenopsisbot/MezzoSopranoClef) project (same author, separate repo).
-  Build it there with `./gradlew :launcher:jar` (the output lands in
-  `launcher/build/libs/`), then point `clef.launcher` in `golem.toml` at the jar.
+  Build it there with `./gradlew build :launcher:jar` (the output lands in
+  `launcher/build/libs/`) or download the jar from that project's releases, then
+  point `clef.launcher` in `golem.toml` at it.
   Golem stages a copy under `data/clef/` on first run.
 - **A Minecraft server you control** (1.21.x, offline-mode if using offline auth).
   A dev server script is included.
@@ -90,6 +91,9 @@ See [docs/SHEM.md](docs/SHEM.md) for the full spec and grammar.
   the appropriate credentials for their provider.
 
 ## Quick start
+
+The full walkthrough, from cloning MezzoSopranoClef to a golem in a world you can join, is
+[docs/SETUP.md](docs/SETUP.md). The short version:
 
 ```bash
 # Install dependencies
@@ -169,7 +173,8 @@ blueprints and `build`, cross-process fleet peering. See
 | [SHEM.md](docs/SHEM.md) | The Shem language: syntax, types, primitives, runtime, grammar |
 | [MCP-TOOLS.md](docs/MCP-TOOLS.md) | The MCP tool surface the mind sees (35 tools) |
 | [CONFIG.md](docs/CONFIG.md) | `golem.toml`: fleet, agents, chat, comms, etiquette, budgets |
-| [DEV.md](docs/DEV.md) | Development setup, shell commands, evals, dashboard, watching a mind |
+| [SETUP.md](docs/SETUP.md) | From nothing to a golem in a world: Clef, server, config, first run |
+| [DEV.md](docs/DEV.md) | Day-to-day commands, shell, evals, dashboard, watching a mind |
 | [DEPLOY.md](docs/DEPLOY.md) | Running bodies on a remote machine |
 | [ROADMAP.md](docs/ROADMAP.md) | Milestones and what's done |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Checks, conventions, what belongs in a tool vs. a script |

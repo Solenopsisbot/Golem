@@ -1,5 +1,7 @@
 # Developing Golem
 
+First time here? `docs/SETUP.md` goes from an empty directory to a golem in a world. This file is the day-to-day.
+
 ## One-time
 
 ```bash
