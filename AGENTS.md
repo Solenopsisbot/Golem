@@ -12,6 +12,10 @@ Golem is an embodied-agent framework for Minecraft. Read `README.md`, then `docs
 - **Reflexes are Golem's job, not the model's.** Self-preservation, unstuck, item pickup and friends run as code with no LLM in the loop and only *notify* the mind.
 - **Kill switch is sacred.** `met` must always work: cancel every run, clear movement input, stop mining, stop Baritone. Nothing may swallow it.
 
+## Map
+
+`src/body` (Clef client, mirror, trace) → `src/primitives` (typed world ops) → `src/reflexes` (twitch layer) → `src/agent` (runtime, session) → `src/drive` (inbox, turns, chat routing) → `src/mind` (ACP client, fs jail) → `src/mcp` (tools, HTTP host, bridge) → `src/shem` (the language: lexer, parser, checker, interpreter, runs, library, host) → `src/eval` (RCON, tasks, runner) → `src/cli` (golem, shell, replay) → `src/dashboard` (one HTML page). Shipped scripts in `shem/lib` and `shem/reflexes`; eval tasks in `tasks/`.
+
 ## Toolchain
 
 TypeScript on Node 26 (native type stripping) or Bun 1.3. Dependencies kept minimal: `@agentclientprotocol/sdk`, `@modelcontextprotocol/sdk`, `minecraft-data` (1.21.8 tables for id validation and recipes), `zod`. Tests with `node --test`. No framework.
