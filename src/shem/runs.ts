@@ -101,7 +101,7 @@ export class RunManager {
         const err = e instanceof GolemError ? e : new GolemError("failed", String((e as Error)?.message ?? e));
         run.error = err; run.endedAt = Date.now(); run.calls = ctx.budget.calls;
         if (run.status === "running") run.status = err.kind === "cancelled" ? "cancelled" : err.kind === "preempted" ? "preempted" : err.kind === "timeout" && Date.now() >= ctx.budget.deadline ? "timeout" : "failed";
-        if (token.cancelled && token.reason.startsWith("preempted")) run.status = "preempted";
+        if (token.cancelled && /^(preempted|reflex)/.test(token.reason)) run.status = "preempted";
         write(`${run.status} !! ${err.kind}: ${err.message}`);
         this.emit("run_failed", run);
         throw err;
