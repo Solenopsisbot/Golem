@@ -116,7 +116,7 @@ async function main(): Promise<void> {
         setTimeout(() => { log.warn("shutdown is taking too long; exiting"); process.exit(0); }, 15_000).unref();
         // Sessions first (they close their body clients), then the bodies, or the clients reconnect forever.
         await Promise.allSettled(sessions.map((s) => s.stop()));
-        for (const s of supervisors) s.stop();
+        await Promise.allSettled(supervisors.map((s) => s.stop()));   // whole process trees, ports verified free
         for (const name of names) { const agent = resolveAgent(loaded, name); if (!agent.body.attach) killBody(agent); }
         await host.stop().catch(() => {});
         process.exit(0);
@@ -166,7 +166,7 @@ async function main(): Promise<void> {
       const sup = !agent.body.attach && !isBodyRunning(agent) ? superviseBody(agent) : undefined;
       const runner = new EvalRunner({ agentName: name, loaded, host, fresh: !keepSession, label });
       const results = [];
-      const shutdown = async () => { runner.close(); sup?.stop(); await host.stop().catch(() => {}); process.exit(0); };
+      const shutdown = async () => { runner.close(); await sup?.stop(); await host.stop().catch(() => {}); process.exit(0); };
       process.once("SIGINT", shutdown);
       for (const { path, task } of tasks) {
         log.info(`--- ${task.name}: ${task.description || task.goal}`);

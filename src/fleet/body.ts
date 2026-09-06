@@ -1,7 +1,7 @@
 // Spawning a MezzoSopranoClef body from the standalone launcher jar, one game dir per agent.
 // The launcher downloads Minecraft + Fabric into CLEF_GAMEDIR on first run (minutes), then boots
 // the headless client, which reads config/mezzoclef.json from that dir.
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { AgentConfig } from "../config/schema.ts";
@@ -79,13 +79,70 @@ export function spawnBody(agent: AgentConfig): ChildProcess {
   return child;
 }
 
+/** Direct children of a pid (pgrep -P), empty when none or when pgrep is missing. */
+function childrenOf(pid: number): number[] {
+  try { return execFileSync("pgrep", ["-P", String(pid)], { encoding: "utf8" }).split(/\s+/).filter(Boolean).map(Number); }
+  catch { return []; }
+}
+/** The pid and every descendant, deepest last. The launcher's JVM child is the one holding the port. */
+function processTree(pid: number): number[] {
+  const out = [pid];
+  for (const c of childrenOf(pid)) out.push(...processTree(c));
+  return out;
+}
+function alive(pid: number): boolean { try { process.kill(pid, 0); return true; } catch { return false; } }
+
+/** Pids listening on a local TCP port (lsof), empty when none. */
+export function portHolders(port: number): number[] {
+  try { return execFileSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"], { encoding: "utf8" }).split(/\s+/).filter(Boolean).map(Number); }
+  catch { return []; }
+}
+function commandOf(pid: number): string {
+  try { return execFileSync("ps", ["-o", "command=", "-p", String(pid)], { encoding: "utf8" }).trim(); } catch { return ""; }
+}
+function looksLikeClef(pid: number): boolean { return /mezzoclef|launcher\.jar|fabric|minecraft/i.test(commandOf(pid)); }
+
+/**
+ * Kill a body's whole process tree: SIGTERM first, SIGKILL after `graceMs`, and wait until the
+ * control port is free so the next launch (or a sibling process) can't attach to a corpse.
+ * SIGTERM to the launcher alone used to orphan the JVM under it, which kept the port and the
+ * username and got the fresh body kicked with "logged in from another location".
+ */
+export async function killTree(rootPid: number, port: number | undefined, graceMs = 6000): Promise<void> {
+  const pids = processTree(rootPid);
+  for (const pid of pids) { try { process.kill(pid, "SIGTERM"); } catch { /* gone */ } }
+  const t0 = Date.now();
+  while (Date.now() - t0 < graceMs && pids.some(alive)) await new Promise((r) => setTimeout(r, 200));
+  for (const pid of pids) if (alive(pid)) { try { process.kill(pid, "SIGKILL"); } catch { /* gone */ } }
+  if (port !== undefined) {
+    const t1 = Date.now();
+    while (Date.now() - t1 < 5000 && portHolders(port).length) await new Promise((r) => setTimeout(r, 200));
+  }
+}
+
 export function killBody(agent: AgentConfig): boolean {
   const pid = isBodyRunning(agent);
   if (!pid) return false;
-  try { process.kill(pid, "SIGTERM"); return true; } catch { return false; }
+  void killTree(pid, agent.body.port);
+  return true;
 }
 
-export interface Supervisor { stop(): void; readonly child: ChildProcess | undefined }
+/**
+ * A body's control port must be ours to take. A stale Clef holding it (an orphan from an earlier
+ * run) is killed; anything else is an error naming the holder, because attaching to the wrong
+ * process wastes ninety seconds of "joining the world" per attempt.
+ */
+export async function ensurePortFree(agent: AgentConfig): Promise<void> {
+  const holders = portHolders(agent.body.port);
+  if (!holders.length) return;
+  const stale = holders.filter(looksLikeClef);
+  if (stale.length !== holders.length) throw new Error(`${agent.name}: port ${agent.body.port} is held by pid(s) ${holders.join(", ")} (${holders.map(commandOf).join(" | ").slice(0, 120)}), not a Clef body; pick another base_port or stop it`);
+  log.warn(`${agent.name}: port ${agent.body.port} held by stale Clef pid(s) ${stale.join(", ")}; killing before launch`);
+  for (const pid of stale) await killTree(pid, agent.body.port);
+  if (portHolders(agent.body.port).length) throw new Error(`${agent.name}: port ${agent.body.port} still held after killing stale bodies`);
+}
+
+export interface Supervisor { stop(): Promise<void>; readonly child: ChildProcess | undefined }
 
 /**
  * Keep a body alive: relaunch it `restartDelayMs` after it exits for any reason we didn't ask for.
@@ -98,7 +155,9 @@ export function superviseBody(agent: AgentConfig, opts: { restartDelayMs?: numbe
   const restarts: number[] = [];
   let stopped = false;
   let child: ChildProcess | undefined;
-  const launch = () => {
+  const launch = async () => {
+    if (stopped) return;
+    try { await ensurePortFree(agent); } catch (e) { log.error(`${agent.name}: ${(e as Error).message}`); return; }
     if (stopped) return;
     child = spawnBody(agent);
     child.once("exit", (code, sig) => {
@@ -108,12 +167,12 @@ export function superviseBody(agent: AgentConfig, opts: { restartDelayMs?: numbe
       if (restarts.length >= maxPerHour) { log.error(`${agent.name}: body died ${restarts.length} times this hour; not restarting`); return; }
       restarts.push(now);
       log.warn(`${agent.name}: body exited (${code ?? sig}); relaunching in ${delay / 1000}s`);
-      setTimeout(launch, delay);
+      setTimeout(() => { void launch(); }, delay);
     });
   };
-  launch();
+  void launch();
   return {
-    stop() { stopped = true; if (child?.pid) { try { process.kill(child.pid, "SIGTERM"); } catch { /* gone */ } } },
+    async stop() { stopped = true; if (child?.pid) await killTree(child.pid, agent.body.port); },
     get child() { return child; },
   };
 }
