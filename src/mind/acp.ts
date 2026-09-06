@@ -48,6 +48,7 @@ export class Mind {
   configOptions: acp.SessionConfigOption[] = [];
   /** The profile currently applied ("plan" | "act" | ""), so switches are no-ops when unchanged. */
   profile = "";
+  private fresh = false;
   private turn: Promise<TurnResult> | null = null;
   /** Prompts sent into the running turn; the turn loop waits for one stop per outstanding prompt. */
   private outstanding = 0;
@@ -69,8 +70,9 @@ export class Mind {
     return !!meta.claudeCode?.promptQueueing;
   }
 
-  /** Spawn the agent, initialise, open the session, set the permission mode. */
-  async start(): Promise<void> {
+  /** Spawn the agent, initialise, open the session, set the permission mode. `fresh` skips resume and leaves the saved id alone. */
+  async start(opts: { fresh?: boolean } = {}): Promise<void> {
+    this.fresh = !!opts.fresh;
     const { agent, cwd } = this.opts;
     mkdirSync(agent.dataDir, { recursive: true });
     const errLog = openSync(resolve(agent.dataDir, "mind.log"), "a");
@@ -142,7 +144,7 @@ export class Mind {
     let saved: SavedSession | null = null;
     if (existsSync(this.sessionFile)) { try { saved = JSON.parse(readFileSync(this.sessionFile, "utf8")); } catch { saved = null; } }
     const sameAgent = saved && saved.command === agent.mind.command && JSON.stringify(saved.args) === JSON.stringify(agent.mind.args);
-    if (saved && sameAgent && this.caps.loadSession) {
+    if (!this.fresh && saved && sameAgent && this.caps.loadSession) {
       try {
         const resp = await ctx.request(acp.methods.agent.session.load, { sessionId: saved.sessionId, cwd, mcpServers });
         const attach = (ctx as unknown as { attachSession(r: { sessionId: string; modes?: acp.SessionModeState | null }): acp.ActiveSession }).attachSession;
@@ -157,8 +159,11 @@ export class Mind {
     const session = await ctx.buildSession({ cwd, mcpServers }).start();
     this.configOptions = session.newSessionResponse.configOptions ?? [];
     this.resumed = false;
-    const record: SavedSession = { sessionId: session.sessionId, command: agent.mind.command, args: agent.mind.args, savedAt: Date.now() };
-    try { writeFileSync(this.sessionFile, JSON.stringify(record, null, 2) + "\n"); } catch (e) { this.log.warn(`could not save session id: ${(e as Error).message}`); }
+    if (!this.fresh) {
+      if (saved && saved.sessionId !== session.sessionId) this.log.warn(`previous session ${saved.sessionId} not resumed (${!this.caps.loadSession ? "agent can't load sessions" : !sameAgent ? "different agent command" : "load failed"}); starting ${session.sessionId}`);
+      const record: SavedSession = { sessionId: session.sessionId, command: agent.mind.command, args: agent.mind.args, savedAt: Date.now() };
+      try { writeFileSync(this.sessionFile, JSON.stringify(record, null, 2) + "\n"); } catch (e) { this.log.warn(`could not save session id: ${(e as Error).message}`); }
+    } else this.log.info("fresh session (not saved; the previous id is kept for the next normal start)");
     return session;
   }
 

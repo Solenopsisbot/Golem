@@ -1,6 +1,6 @@
 // The eval runner: for each task, reset the world over RCON, start a session with a fresh mind,
 // hand the goal over as an owner message, watch the predicates, record the result.
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { AgentSession } from "../agent/session.ts";
 import type { LoadedConfig } from "../config/load.ts";
@@ -80,8 +80,7 @@ export class EvalRunner {
     const t0 = Date.now();
     const said: string[] = [];
     let deaths = 0, turns = 0, toolCalls = 0, tokens = 0;
-    if (task.fresh_session && (this.opts.fresh ?? true)) { try { rmSync(resolve(agent.dataDir, "session.json")); } catch { /* none */ } }
-    const session = await AgentSession.start(agent, host, { waitForBodyMs: 900_000, orient: false });
+    const session = await AgentSession.start(agent, host, { waitForBodyMs: 900_000, orient: false, freshMind: task.fresh_session && (this.opts.fresh ?? true) });
     const off = host.mcpUrl(agentName) ? session.subscribeEvents((ev) => {
       if (ev.type === "turn_end") { turns++; tokens += Number(ev.tokens ?? 0); toolCalls += Number(ev.toolCalls ?? 0); }
     }) : () => {};

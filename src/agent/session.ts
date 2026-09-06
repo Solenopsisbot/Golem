@@ -39,7 +39,7 @@ export class AgentSession {
     this.journal = new Journal(agent.workspaceDir);
   }
 
-  static async start(agent: AgentConfig, host: GolemHttpHost, opts: { waitForBodyMs?: number; orient?: boolean } = {}): Promise<AgentSession> {
+  static async start(agent: AgentConfig, host: GolemHttpHost, opts: { waitForBodyMs?: number; orient?: boolean; freshMind?: boolean } = {}): Promise<AgentSession> {
     const s = new AgentSession(agent, host);
     await s.rt.start({ waitForBodyMs: opts.waitForBodyMs ?? 900_000 });
     s.journal.note(`session started; ${s.rt.mirror.summary(agent.name)}`);
@@ -70,7 +70,7 @@ export class AgentSession {
       if (!run.background) return;   // foreground runs report back through the tool that started them
       s.drive.push({ kind: type, priority: type === "run_failed" ? 45 : 40, text: describeRun(run, 4) });
     });
-    await s.mind.start();
+    await s.mind.start({ fresh: !!opts.freshMind });
     s.drive.start();
     if (s.mind.resumed) {
       s.drive.push({ kind: "system", priority: 30, text: "(Golem restarted; your session was resumed with its history. The world may have moved on: check status before acting on old assumptions.)" });
