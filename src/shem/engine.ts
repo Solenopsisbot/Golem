@@ -53,8 +53,17 @@ export class ShemEngine {
     const errors = this.library.check(lf, { registry: this.registry }).filter((d) => d.severity === "error");
     if (errors.length) throw new GolemError("failed", `${lf.rel} has check errors; fix them first:\n${formatDiagnostics(errors, lf.rel)}`);
     const { program } = this.library.program(lf);
-    const name = script ?? (program.scripts.has(lf.file.name) ? lf.file.name : program.scripts.has("main") ? "main" : lf.file.scripts[0]?.name);
-    if (!name || !program.scripts.has(name)) throw new GolemError("not_found", `${lf.rel} has no script named ${script ?? "main"} (has: ${[...program.scripts.keys()].join(", ") || "none"})`);
+    const own = lf.file.scripts.map((x) => x.name);
+    // Be forgiving about where the script name went: `params.script` naming a script counts.
+    if (!script && typeof params.script === "string" && program.scripts.has(params.script) ) { script = params.script; params = { ...params }; delete params.script; }
+    let name = script;
+    if (!name) {
+      if (program.scripts.has(lf.file.name)) name = lf.file.name;
+      else if (program.scripts.has("main")) name = "main";
+      else if (own.length === 1) name = own[0]!;
+      else throw new GolemError("not_found", `${lf.rel} has several scripts and none is called main or ${lf.file.name}; pass script: one of ${own.join(", ")}`);
+    }
+    if (!program.scripts.has(name)) throw new GolemError("not_found", `${lf.rel} has no script named ${name} (has: ${[...program.scripts.keys()].join(", ") || "none"})`);
     return this.runs.start(program, name, params, { ...opts, label: `${lf.rel}:${name}`, parent: opts.background ? undefined : this.rt.foregroundToken });
   }
 
