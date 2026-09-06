@@ -80,7 +80,7 @@ export const BUILTINS: BuiltinSpec[] = [
   { name: "mine", params: [p("pos", "pos"), p("collect", "bool", "true")], returns: "record", doc: "Break one block (walks there, best tool, collects the drop).", blocking: true },
   { name: "mine_all", params: [p("kind", "block"), p("want", "int", "1"), p("timeout", "dur", "5m")], returns: "record", doc: "Baritone mines a block kind until `want` of its drop are collected: .got .item. Good for common blocks (stone, logs); for ore you can already see, `for (b of find_blocks(kind)) mine(b.pos)` is faster and won't wander.", blocking: true },
   { name: "place", params: [p("item", "item"), p("pos", "pos")], returns: "record", doc: "Place an item so it occupies pos.", blocking: true },
-  { name: "place_here", params: [p("item", "item")], returns: "record", doc: "Place an item at your feet after stepping aside.", blocking: true },
+  { name: "place_here", params: [p("item", "item")], returns: "record", doc: "Place an item on a free spot next to you (north/east/south/west, needs ground under it): .pos is where it went.", blocking: true },
   { name: "use_item", params: [p("hand", "string", '"main"')], returns: "none", doc: "Right-click with what you hold.", blocking: true },
   { name: "use_on", params: [p("target", "any")], returns: "none", doc: "Right-click a block pos or entity.", blocking: true },
   { name: "attack", params: [p("target", "any"), p("timeout", "dur", "30s")], returns: "record", doc: "Fight an entity (or id) until it's gone: .killed .hits", blocking: true },

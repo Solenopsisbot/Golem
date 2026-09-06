@@ -455,7 +455,7 @@ export async function smelt(ctx: Ctx, item: string, n = 1, opts: SmeltOpts = {})
 }
 
 /** Place a block on a free spot next to the bot and return where it went. */
-async function placeNearby(ctx: Ctx, item: string): Promise<Pos> {
+export async function placeNearby(ctx: Ctx, item: string): Promise<Pos> {
   const here = ctx.mirror.blockPos;
   for (const f of ["north", "east", "south", "west"] as Face[]) {
     const spot = offset(here, f);

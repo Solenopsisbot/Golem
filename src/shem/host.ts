@@ -132,7 +132,7 @@ export function makeShemHost(rt: AgentRuntime): Host {
   def("mine", async (p, a, n) => { const r = await p.mine(posOf(arg(a, n, 0, "pos") ?? null), { collect: arg(a, n, 1, "collect") !== false }); return { broken: r.broken, block: r.block, ms: r.ms }; });
   def("mine_all", async (p, a, n) => { const r = await p.mineAll(toStr(arg(a, n, 0, "kind") ?? ""), toNum(arg(a, n, 1, "want") ?? 1), { timeoutMs: durArg(arg(a, n, 2, "timeout"), 300_000) }); return { got: r.got, item: r.item, ms: r.ms }; });
   def("place", async (p, a, n) => { const r = await p.place(toStr(arg(a, n, 0, "item") ?? ""), posOf(arg(a, n, 1, "pos") ?? null)); return { placed: r.placed }; });
-  def("place_here", async (p, a, n) => { const here = rt.mirror.blockPos; const r = await p.place(toStr(arg(a, n, 0, "item") ?? ""), here); return { placed: r.placed, pos: new Vec3(here.x, here.y, here.z, true) }; });
+  def("place_here", async (p, a, n) => { const at = await p.placeNearby(toStr(arg(a, n, 0, "item") ?? "")); return { placed: true, pos: new Vec3(at.x, at.y, at.z, true) }; });
   def("use_item", async (p, a, n) => { await p.useItem((arg(a, n, 0, "hand") as "main" | "off") ?? "main"); return null; });
   def("use_on", async (p, a, n) => { const t = arg(a, n, 0, "target") ?? null; if (t && typeof t === "object" && !(t instanceof Vec3) && typeof (t as Record_).id === "number") await p.interactEntity((t as Record_).id as number); else await p.useOnBlock(posOf(t)); return null; });
   def("attack", async (p, a, n) => { const r = await p.attack(entityTarget(arg(a, n, 0, "target") ?? null), { timeoutMs: durArg(arg(a, n, 1, "timeout"), 30_000) }); return { killed: r.killed, hits: r.hits }; });

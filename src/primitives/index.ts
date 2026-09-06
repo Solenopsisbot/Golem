@@ -53,6 +53,7 @@ export function makePrimitives(ctx: Ctx) {
     // actions
     mine: bind(ctx, actions.mine),
     place: bind(ctx, actions.place),
+    placeNearby: bind(ctx, actions.placeNearby),
     useOnBlock: bind(ctx, actions.useOnBlock),
     useItem: bind(ctx, actions.useItem),
     interactEntity: bind(ctx, actions.interactEntity),
