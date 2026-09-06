@@ -72,8 +72,11 @@ export class Drive {
   push(item: Omit<InboxItem, "id" | "t">): InboxItem {
     const a = this.rt.agent;
     const urgent = this.mind.busy && item.priority >= a.drive.interrupt_priority;
-    const chatty = item.kind === "chat" || item.kind === "whisper" || item.kind === "bridge" || item.kind === "goal";
-    if (urgent && chatty && a.drive.interrupt_mode === "queue") {
+    const chatty = item.kind === "chat" || item.kind === "whisper" || item.kind === "bridge" || item.kind === "goal" || item.kind === "agent";
+    // Queueing costs nothing (no cancel), so anything conversational from an addressed player or
+    // another agent rides into the running turn; ambient chat waits for the next one.
+    const conversational = this.mind.busy && chatty && item.priority >= 50;
+    if (conversational && a.drive.interrupt_mode === "queue") {
       // Fold the message into the running turn: no cancel, no lost work. It never enters the inbox.
       const it: InboxItem = { id: -1, t: Date.now(), ...item };
       const text = `${this.stateHeader()}\n${renderInbox([it])}`;
