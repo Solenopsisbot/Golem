@@ -96,9 +96,11 @@ export const autoEat: Reflex<number> = {
   description: "Eat when hungry and not in a fight.",
   priority: 70,
   cooldownMs: 10_000,
-  check: (ctx) => {
+  check: async (ctx) => {
     const m = ctx.mirror;
-    return m.food <= 14 && m.damageInLast(3000) === 0 && !m.screen ? m.food : null;
+    if (!(m.food <= 14 && m.damageInLast(3000) === 0 && !m.screen)) return null;
+    const { bestFood } = await import("../primitives/inventory.ts");
+    return (await bestFood(ctx)) ? m.food : null;   // hungry with nothing to eat is the mind's problem, not a reflex
   },
   async act(p, food) {
     const r = await p.eat();

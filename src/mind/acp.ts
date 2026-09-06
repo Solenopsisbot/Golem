@@ -109,6 +109,7 @@ export class Mind {
           }
           this.session = await this.resumeOrCreate(ctx, cwd, mcpServers);
           this.log.info(`session ${this.session.sessionId}${this.resumed ? " (resumed)" : ""} (images=${this.supportsImages}, loadSession=${!!this.caps.loadSession})`);
+          this.log.info(`options: ${this.describeOptions()}`);
           await this.applyMode();
           ready();
         } catch (e) {

@@ -40,6 +40,7 @@ export class ReflexEngine {
   private readonly reflexes = new Map<string, Reflex<any>>();
   private readonly enabled = new Set<string>();
   private readonly lastFired = new Map<string, number>();
+  private readonly failures = new Map<string, number>();
   private timer: ReturnType<typeof setInterval> | undefined;
   private acting: { name: string; token: CancelToken } | null = null;
   private readonly opts: ReflexEngineOptions;
@@ -86,7 +87,11 @@ export class ReflexEngine {
     const ordered = [...this.reflexes.values()].filter((r) => this.enabled.has(r.name)).sort((a, b) => b.priority - a.priority);
     for (const r of ordered) {
       if (r.idleOnly && this.ctx.activity.busy) continue;
-      if (r.cooldownMs && now - (this.lastFired.get(r.name) ?? 0) < r.cooldownMs) continue;
+      // Cooldown doubles after each consecutive failure (max ~4 min), so a reflex that can't act
+      // (no food, no bed) doesn't hammer the body every few seconds.
+      const fails = this.failures.get(r.name) ?? 0;
+      const cooldown = (r.cooldownMs ?? 0) * 2 ** Math.min(fails, 5);
+      if (cooldown && now - (this.lastFired.get(r.name) ?? 0) < cooldown) continue;
       let trigger: unknown;
       try { trigger = await r.check(this.ctx); } catch (e) { this.log.debug(`${r.name}.check threw: ${(e as Error).message}`); continue; }
       if (!trigger) continue;
@@ -103,10 +108,14 @@ export class ReflexEngine {
           const text = note ?? `${r.name} fired`;
           if (note || r.interrupts) this.log.info(`reflex ${r.name}: ${text}`); else this.log.debug(`reflex ${r.name}: ${text}`);
           this.ctx.trace.mark("reflex", { name: r.name, phase: "end", note: text });
+          this.failures.delete(r.name);
           if (note || r.interrupts || r.notify) this.opts.onFire?.({ name: r.name, note: text, at: Date.now(), trigger });
         } catch (e) {
           const msg = e instanceof GolemError ? `${e.kind}: ${e.message}` : String(e);
-          this.log.warn(`reflex ${r.name} failed: ${msg}`);
+          const n = (this.failures.get(r.name) ?? 0) + 1;
+          this.failures.set(r.name, n);
+          if (n <= 2) this.log.warn(`reflex ${r.name} failed: ${msg}`); else this.log.debug(`reflex ${r.name} failed (${n}x): ${msg}`);
+          if (n === 3) this.opts.onFire?.({ name: r.name, note: `keeps failing: ${msg}`, at: Date.now(), trigger });
           this.ctx.trace.mark("reflex", { name: r.name, phase: "error", error: msg });
         } finally {
           this.acting = null;

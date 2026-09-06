@@ -184,10 +184,20 @@ export async function eat(ctx: Ctx, item?: string): Promise<{ ate: string | null
     const choice = item ?? (await bestFood(ctx));
     if (!choice) throw new GolemError("missing_item", "no food in inventory");
     await selectItem(ctx, choice);
+    // Movement interrupts item use, so pause Baritone while chewing and resume after.
+    const wasPathing = ctx.mirror.navActive;
+    if (wasPathing) await ctx.body.call("baritone", { command: "pause" }).catch(() => {});
+    await ctx.body.call("stopMove").catch(() => {});
+    await ctx.mirror.refresh().catch(() => {});
     const before = ctx.mirror.food;
-    try { await ctx.body.call("eat", { ticks: 40 }); } catch (e) { throw fromClef(e, "eat"); }
-    await until(() => ctx.mirror.food > before, { timeoutMs: 4000, intervalMs: 200, what: `eating ${choice}`, token: ctx.token })
-      .catch(() => { throw new GolemError("failed", `ate ${choice} but hunger did not change`); });
+    try {
+      try { await ctx.body.call("eat", { ticks: 40 }); } catch (e) { throw fromClef(e, "eat"); }
+      await until(async () => { if (ctx.mirror.food > before) return true; await ctx.mirror.refresh().catch(() => {}); return ctx.mirror.food > before; },
+        { timeoutMs: 6000, intervalMs: 400, what: `eating ${choice}`, token: ctx.token })
+        .catch(() => { throw new GolemError("failed", `ate ${choice} but hunger did not change (was it interrupted by movement or combat?)`); });
+    } finally {
+      if (wasPathing) await ctx.body.call("baritone", { command: "resume" }).catch(() => {});
+    }
     return { ate: choice, food: ctx.mirror.food };
   });
 }
