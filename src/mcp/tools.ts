@@ -14,6 +14,7 @@ import { resolve } from "node:path";
 
 import type { ShemEngine } from "../shem/engine.ts";
 import { describeRun } from "../shem/runs.ts";
+import { wrapSnippet } from "../shem/engine.ts";
 export interface ToolCtx { rt: AgentRuntime; drive: Drive; p: Primitives; shem?: ShemEngine }
 export interface ToolResult { text: string; image?: { data: Buffer; mimeType: string } }
 export interface ToolDef<S extends z.ZodRawShape = z.ZodRawShape> {
@@ -35,12 +36,6 @@ export function saveScriptPath(p: string): string {
   const rel = p.replace(/^\.\//, "").replace(/^\/+/, "");
   if (!/^shem\/[A-Za-z0-9_\-]+(\/[A-Za-z0-9_\-]+)*\.shem$/.test(rel) || rel.startsWith("shem/lib/")) throw new GolemError("policy", `save must be a path like shem/name.shem (not under shem/lib/), got ${p}`);
   return rel;
-}
-/** Bare statements become a file with one script; declarations are kept as they are. */
-export function wrapAsScript(code: string): string {
-  const src = code.replace(/\r\n/g, "\n");
-  if (/^\s*(script|reflex|use)\b/m.test(src)) return src.endsWith("\n") ? src : src + "\n";
-  return `script main() {\n${src.split("\n").map((l) => (l.trim() ? "  " + l : l)).join("\n")}\n}\n`;
 }
 export const TOOLS: ToolDef[] = [
   // ---- perception ----------------------------------------------------------------
@@ -127,7 +122,7 @@ export const SHEM_TOOLS: ToolDef[] = [
       const e = needShem(tc);
       if (a.save) {
         const rel = saveScriptPath(a.save);
-        const src = wrapAsScript(a.code);
+        const src = wrapSnippet(a.code);
         const check = e.checkSource(src);
         if (check.diagnostics.some((d) => d.severity === "error")) return ok(`not saved: ${check.text}`);
         e.saveScript(tc.rt.agent.workspaceDir, rel, src);

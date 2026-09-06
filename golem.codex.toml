@@ -14,10 +14,10 @@ max_heap = "1024m"
 [mind]
 command = "npx"
 args = ["-y", "@zed-industries/codex-acp"]
-permission_mode = "bypass"
+permission_mode = "full-access"   # Codex modes are read-only|auto|full-access; full-access is the no-prompt one
 compact_window = 0
 [mind.models]
-plan = { model = "gpt-6-astra", effort = "low" }
+plan = { model = "gpt-6-astra", effort = "low" }   # needs adapter > 0.16.0; for a runnable test today use gpt-5.5
 act = { model = "gpt-6-astra", effort = "low" }
 
 [players]

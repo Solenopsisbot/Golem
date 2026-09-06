@@ -18,6 +18,29 @@ import { CancelToken } from "../primitives/errors.ts";
 import type { RunCtx } from "./interpreter.ts";
 import { Env } from "./values.ts";
 
+/**
+ * Make a shem_eval snippet parseable: hoist leading `use "..."` lines (the checker tells the model
+ * to add them, but they're only legal at the top of a file, not inside a script body), and wrap the
+ * loose statements in `script main()`. A snippet that already declares a `script` or `reflex` is
+ * left as its own file, its uses kept on top.
+ */
+export function wrapSnippet(src: string): string {
+  const lines = src.replace(/\r\n/g, "\n").split("\n");
+  const uses: string[] = [];
+  let i = 0;
+  for (; i < lines.length; i++) {
+    const t = lines[i]!.trim();
+    if (t === "" || t.startsWith("//")) continue;
+    if (/^use\s+["']/.test(t)) { uses.push(t); continue; }
+    break;
+  }
+  const rest = lines.slice(i).join("\n");
+  const header = uses.length ? uses.join("\n") + "\n" : "";
+  if (/(^|\n)\s*(script|reflex)\s/.test(rest)) return header + rest + (rest.endsWith("\n") ? "" : "\n");
+  const body = rest.split("\n").map((l) => (l.trim() ? "  " + l : l)).join("\n");
+  return `${header}script main() {\n${body}\n}\n`;
+}
+
 export class ShemEngine {
   readonly rt: AgentRuntime;
   readonly library: Library;
@@ -82,10 +105,9 @@ export class ShemEngine {
     return this.runs.start(program, name, params, { ...opts, label: `${lf.rel}:${name}`, parent: opts.background ? undefined : this.rt.foregroundToken });
   }
 
-  /** Run a snippet (a script body, or a full file) without saving it. */
+  /** Run a snippet (loose statements, or a full file with declarations) without saving it. */
   eval(src: string, params: Record<string, Value> = {}, opts: RunOptions = {}): Run {
-    const isFile = /^\s*(script|use|const|reflex|\/\/\/)/m.test(src) && /\bscript\s+\w+\s*\(/.test(src);
-    const lf = this.library.fromSource(isFile ? src : `script main() {\n${src}\n}`);
+    const lf = this.library.fromSource(wrapSnippet(src));
     const errors = this.library.check(lf, { registry: this.registry }).filter((d) => d.severity === "error");
     if (errors.length) throw new GolemError("failed", `snippet has check errors:\n${formatDiagnostics(errors)}`);
     const { program } = this.library.program(lf);

@@ -7,3 +7,4 @@ data/
 
 # your fleet: addresses, owners, attach lines. Copy golem.example.toml to golem.toml.
 golem.toml
+golem.codex.test.toml

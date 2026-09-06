@@ -94,3 +94,5 @@ reflexes.on = ["self_preservation", "unstuck", "self_defense", "hunting", "auto_
 - Tokens (Clef control tokens, Golem MCP bearer tokens) are never in this file. They live under `data/<agent>/` with `0600` permissions.
 - `[etiquette]` is server-manners config, not a moral framework. It exists so a bot on a shared server doesn't dig through someone's floor because a script said "mine down".
 - The CLI reads the same file: `golem up`, `golem up Kiko`, `golem attach Kiko`, `golem shell Kiko` (a Shem REPL against a live body, no mind involved), `golem met all`, `golem eval tasks/basic/*.json`, `golem replay data/Kiko/trace.jsonl --from 12:03`.
+
+`mind.permission_mode` is matched against whatever modes the agent advertises (substring, case-insensitive). Claude Code: `bypass`. Codex: `full-access` (its no-prompt mode; the others are `read-only` and `auto`). If nothing matches, Golem logs the available modes and leaves the agent's default.
