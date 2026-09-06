@@ -25,10 +25,12 @@ default_on = ["auto_respawn", "bunker", "self_preservation", "unstuck", "auto_ea
 [[agents]]
 name = "Clay"
 persona = "personas/clay.md"
+body.attach = "192.168.0.174:9731"   # body runs on cytonic (systemd --user golem-body-Clay); drop this line to run it locally
 
 [[agents]]
 name = "Flint"
 persona = "personas/flint.md"
+body.attach = "192.168.0.174:9732"   # body runs on cytonic (systemd --user golem-body-Flint); drop this line to run it locally
 reflexes.on = ["auto_respawn", "bunker", "self_preservation", "self_defense", "unstuck", "auto_eat", "item_collecting"]
 
 [comms]

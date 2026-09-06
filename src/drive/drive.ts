@@ -316,7 +316,7 @@ export class Drive {
       this.transcript.add("agent", text, { stopReason: r.stopReason, model: this.mind.currentModel, planning, tokens: r.usage?.totalTokens ?? null, cached: r.usage?.cachedReadTokens ?? null, ms: Date.now() - this.turnStartedAt, toolCalls: this.turnToolCalls });
       this.lastTurnToolCalls = this.turnToolCalls;
       this.emit({ type: "turn_end", stopReason: r.stopReason, text, ms: Date.now() - this.turnStartedAt, tokens: r.usage?.totalTokens ?? null, model: this.mind.currentModel, toolCalls: this.turnToolCalls });
-      this.log.info(`turn ended: ${r.stopReason} after ${((Date.now() - this.turnStartedAt) / 1000).toFixed(1)}s, ${this.turnToolCalls} tool calls, ${this.mind.currentModel || "default model"}${planning ? " (planning)" : ""}${r.usage ? ` (${r.usage.totalTokens} tokens, ${r.usage.cachedReadTokens ?? 0} cached)` : ""}`);
+      this.log.info(`turn ended: ${r.stopReason} after ${((Date.now() - this.turnStartedAt) / 1000).toFixed(1)}s, ${this.turnToolCalls} tool calls, ${this.mind.currentModel || "default model"}${planning ? " (planning)" : ""}${this.lastContextUsed ? ` ctx ${Math.round(this.lastContextUsed / 1000)}k` : ""}${r.usage ? ` (${r.usage.totalTokens} tokens, ${r.usage.cachedReadTokens ?? 0} cached)` : ""}`);
       if (r.stopReason === "cancelled") this.push({ kind: "system", priority: 5, text: "(your previous turn was interrupted by what follows)" });
       if (this.rt.agent.chat.speech === "auto" && text) {
         const line = text.split(/\n+/).find((l) => l.trim()) ?? "";

@@ -18,6 +18,8 @@ Mindcraft is good and Golem steals its best ideas: profiles, modes, a code sandb
 
 ## Read next
 
+- `docs/DEPLOY.md`: running bodies on another machine (cytonic is set up).
+
 | Doc | What it covers |
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, process model, the event loop, reflexes, comms, vision, memory, where things run |
