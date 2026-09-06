@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Golem CLI shim: runs the TypeScript entry directly on Node >= 24 (type stripping).
+exec node "$(dirname "$0")/../src/cli/golem.ts" "$@"

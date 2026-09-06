@@ -1,0 +1,32 @@
+{
+  "name": "golem",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Embodied-agent framework for Minecraft: MezzoSopranoClef body, ACP mind, Shem scripts.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "golem": "./bin/golem"
+  },
+  "scripts": {
+    "golem": "node src/cli/golem.ts",
+    "gen:body": "node scripts/gen-body-types.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test 'src/**/*.test.ts'",
+    "gen:tools": "node scripts/gen-tool-docs.ts"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^1.4.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "minecraft-data": "^3.116.0",
+    "smol-toml": "^1.8.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "typescript": "^7.0.2"
+  }
+}

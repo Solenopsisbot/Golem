@@ -1,0 +1,6 @@
+/// Hunt nearby animals when idle and hunger is below 16. Off by default; turn on with reflex_set.
+reflex hunting priority 20 on tick when idle and food < 16 and nearest(["cow", "pig", "chicken", "sheep"], radius: 12) != none {
+  let prey = nearest(["cow", "pig", "chicken", "sheep"], radius: 12)
+  attack(prey, timeout: 20s)
+  collect_drops(radius: 4)
+}

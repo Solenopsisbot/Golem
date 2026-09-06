@@ -1,0 +1,58 @@
+/// Walk to a player by name and stop within `reach` blocks.
+script go_to_player(name: player, reach: int = 2) {
+  let p = find_entities(["player"], radius: 64).find((e) => e.name == name)
+  if (p == none) fail "${name} is not nearby"
+  goto(p.pos, reach: reach, timeout: 90s)
+}
+
+/// Follow a player for a while, then stop.
+script follow_player(name: player, dist: float = 3, duration: dur = 60s) {
+  follow(name, dist: dist)
+  wait duration
+  stop()
+}
+
+/// Fight the nearest hostile within `radius`, if any. Returns true if something was fought.
+script defend(radius: float = 12): bool {
+  let t = threats(radius: radius)
+  if (t.empty) return false
+  let r = attack(t.first, timeout: 30s)
+  say r.killed ? "got it" : "it got away"
+  return true
+}
+
+/// Run away from every hostile within `radius`.
+script retreat(radius: float = 12, dist: float = 16) {
+  let t = threats(radius: radius)
+  if (t.empty) return
+  flee(t, dist: dist)
+}
+
+/// Eat when hunger is at or below `below`. Returns what was eaten, or none.
+script eat_if_hungry(below: int = 14): string? {
+  if (food > below) return none
+  let r = eat_something()
+  return r.ate
+}
+
+/// Put every stack of the given items into a chest at `chest`.
+script deposit_loot(chest: pos, items: list<item>) {
+  open(chest)
+  for (it of items) {
+    if (inventory.has(it)) deposit(it)
+  }
+  close()
+}
+
+/// Take items out of a chest at `chest`.
+script fetch_from(chest: pos, items: list<item>) {
+  open(chest)
+  for (it of items) withdraw(it)
+  close()
+}
+
+/// Walk somewhere, say something when you arrive.
+script announce_arrival(target: pos, text: string = "here") {
+  goto(target, reach: 2)
+  say text
+}

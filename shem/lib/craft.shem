@@ -1,0 +1,46 @@
+/// Turn logs into planks. Returns how many planks you now have.
+script make_planks(kind: block = "oak_log", want: int = 8): int {
+  let plank = kind.replace("_log", "_planks")
+  while (inventory.count(plank) < want and inventory.has(kind)) {
+    craft(plank, n: 1)
+  }
+  return inventory.count(plank)
+}
+
+/// Make sticks from planks. Returns how many sticks you now have.
+script make_sticks(want: int = 8): int {
+  while (inventory.count("stick") < want) {
+    let planks = inventory.items.filter((i) => i.short.ends_with("_planks"))
+    if (planks.empty) fail "no planks to make sticks from"
+    craft("stick", n: 1)
+  }
+  return inventory.count("stick")
+}
+
+/// Place a crafting table next to you (crafting one first if needed) and return its position.
+script table_here(): pos {
+  if (not inventory.has("crafting_table")) {
+    make_planks(want: 4)
+    craft("crafting_table")
+  }
+  let spot = here.offset("north")
+  if (not block_at(spot).air) spot = here.offset("east")
+  if (not block_at(spot).air) spot = here.offset("south")
+  place("crafting_table", spot)
+  remember("table", spot, "crafting table")
+  return spot
+}
+
+/// Craft a wooden pickaxe and axe from whatever logs you carry. Returns true on success.
+script wooden_tools(): bool {
+  let logs = inventory.items.filter((i) => i.short.ends_with("_log"))
+  if (logs.empty) fail "no logs; run collect_any_wood first"
+  make_planks(logs.first.short, want: 10)
+  make_sticks(want: 4)
+  let table = table_here()
+  open(table)
+  craft("wooden_pickaxe")
+  craft("wooden_axe")
+  close()
+  return inventory.has("wooden_pickaxe") and inventory.has("wooden_axe")
+}

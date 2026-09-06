@@ -1,0 +1,30 @@
+/// Collect logs of a kind from nearby trees. Returns how many were gathered.
+/// Uses find_blocks when the body can scan; falls back to Baritone's own mining otherwise.
+script collect_wood(kind: block = "oak_log", want: int = 8, radius: int = 48): int {
+  let item = item_of(kind)
+  let start = inventory.count(item)
+  let logs = find_blocks(kind, radius: radius, max: 64)
+  if (logs.empty) {
+    let r = mine_all(kind, want: want, timeout: 4m)
+    return r.got
+  }
+  for (b of logs) {
+    try {
+      mine(b.pos)
+    } catch (e) {
+      log "skipping ${b.pos}: ${e.kind}"
+      continue
+    }
+    if (inventory.count(item) - start >= want) break
+  }
+  collect_drops(radius: 6)
+  return inventory.count(item) - start
+}
+
+/// Find any log kind nearby (oak, birch, spruce, jungle, acacia, dark oak) and collect it.
+script collect_any_wood(want: int = 8, radius: int = 48): int {
+  let kinds = ["oak_log", "birch_log", "spruce_log", "jungle_log", "acacia_log", "dark_oak_log", "cherry_log", "mangrove_log"]
+  let hits = find_blocks(kinds, radius: radius, max: 8)
+  if (hits.empty) fail "no logs within ${radius} blocks"
+  return collect_wood(hits.first.short, want: want, radius: radius)
+}

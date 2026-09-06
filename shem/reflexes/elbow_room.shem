@@ -1,0 +1,4 @@
+/// Step away from players who stand too close, when idle. Off by default.
+reflex elbow_room priority 15 on tick when idle and nearest_player(radius: 1.5) != none {
+  flee(nearest_player(radius: 1.5), dist: 3)
+}
