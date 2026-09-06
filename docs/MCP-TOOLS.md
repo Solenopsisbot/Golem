@@ -35,15 +35,15 @@ Tools are grouped and named with a short prefix so they sort together in the age
 | `follow` | player, distance | Follow a player until `stop`. Returns immediately. |
 | `stop` |  | Stop moving, mining, pathing and item use. |
 | `look_at` | x, y, z, entity_id | Turn your head toward a block position or an entity id. |
-| `explore` |  | Wander into unexplored terrain until `stop`. |
-| `surface` |  | Climb to the surface. |
+| `explore` | for_s | Wander into unexplored terrain. With for_s it blocks that long and stops; without, it returns at once and runs until `stop`. |
+| `surface` |  | Climb to the surface. Fails if you're sealed in (open a door or dig first). |
 
 ### Actions
 
 | Tool | Args | What it does |
 |---|---|---|
 | `mine` | x, y, z | Break one block at a position (walks there, picks the best tool, collects the drop). |
-| `mine_all` | kind, count, timeout_s | Mine blocks of a kind until you've collected `count` of the drop (Baritone finds them). Long-running. |
+| `mine_all` | kind, count, timeout_s | Baritone mines a block kind until you've collected `count` of the drop. Good for common blocks; for ore you can see, find_blocks + mine (or a shem_eval loop) is faster and won't wander off. |
 | `place` | item, x, y, z | Place an item from your inventory so it occupies a position. |
 | `use_on` | x, y, z, entity_id | Right-click a block (door, lever, bed, chest...) or an entity id with what you hold. |
 | `attack` | entity_id, timeout_s | Fight an entity by id until it's gone or the timeout passes (walks into reach, picks a weapon). |
@@ -81,6 +81,20 @@ Tools are grouped and named with a short prefix so they sort together in the age
 | `met` |  | Stop everything immediately: movement, mining, pathing, reflex actions. |
 
 ### Scripts (Shem)
+
+| Tool | Args | What it does |
+|---|---|---|
+| `shem_check` | path, source | Check a Shem script file (path under your workspace, or lib/<name>) without running it: syntax, unknown names, arity, unknown block/item ids, bare numbers where durations go. |
+| `shem_run` | path, script, params, priority, interrupt, background, timeout_s | Run a script from a file. `path` is the file (shem/mine.shem, or lib/wood for the standard library); `script` is the script name inside it (required when the file has several, e.g. lib/craft has make_planks, make_sticks, table_here, wooden_tools); `params` are the script's own parameters as JSON. Blocks until it ends or timeout_s passes (the run keeps going; use shem_status/shem_wait). background: true returns immediately. interrupt: true preempts a lower-priority foreground run. |
+| `shem_eval` | code, params, timeout_s, background | Run a Shem snippet (statements, or a whole file with script declarations) without saving it. Good for one-off actions and for trying a script before writing it. |
+| `shem_status` | run | Status and trace tail of a run. |
+| `shem_wait` | run, timeout_s | Wait for a run to end (bounded). |
+| `shem_cancel` | run | Cancel a run, or every active run when omitted. |
+| `shem_runs` |  | Active and recent runs. |
+| `shem_list` |  | Index of every script you can run: yours under shem/, the standard library under lib/, and reflexes. |
+| `shem_doc` | name | Documentation for a Shem function, getter, event, or library script by name. |
+
+## Scripts (Shem)
 
 | Tool | Args | What it does |
 |---|---|---|

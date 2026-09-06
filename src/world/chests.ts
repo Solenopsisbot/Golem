@@ -26,8 +26,9 @@ export function recordChest(workspaceDir: string, pos: Pos, dimension: string, h
   // Only the container's own slots (the trailing 36 are the player's inventory).
   const own = containerSize !== undefined ? slots.filter((s) => s.slot < containerSize) : slots.slice(0, Math.max(0, slots.length - 36));
   for (const s of own) {
-    if (!s.item || s.item === "empty" || s.item === "minecraft:air") continue;
-    items[s.item] = (items[s.item] ?? 0) + s.count;
+    const id = s.item.replace(/\s+x\d+$/, "");   // Clef renders "minecraft:coal x7"
+    if (!id || id === "empty" || id === "minecraft:air") continue;
+    items[id] = (items[id] ?? 0) + s.count;
   }
   const rec: ChestRecord = { ...pos, dimension, handler, items, seenAt: Date.now() };
   all[key] = rec;

@@ -125,6 +125,7 @@ export const unstuck: Reflex<number> = {
   },
 };
 
+const chased = new Map<number, { n: number; at: number }>();
 export const itemCollecting: Reflex<Entity> = {
   name: "item_collecting",
   description: "Pick up nearby dropped items when idle.",
@@ -133,11 +134,15 @@ export const itemCollecting: Reflex<Entity> = {
   cooldownMs: 2500,
   check: async (ctx) => {
     if (ctx.mirror.navActive) return null;
-    const items = (await ctx_entities(ctx, 8)).filter((e) => e.isItem);
+    const now = Date.now();
+    for (const [id, c] of chased) if (now - c.at > 120_000) chased.delete(id);
+    const items = (await ctx_entities(ctx, 8)).filter((e) => e.isItem && (chased.get(e.id)?.n ?? 0) < 2);
     return items[0] ?? null;
   },
   async act(p, it) {
-    await p.goto({ x: Math.floor(it.x), y: Math.floor(it.y), z: Math.floor(it.z) }, { reach: 1, timeoutMs: 8000, retry: false }).catch(() => {});
+    const c = chased.get(it.id) ?? { n: 0, at: Date.now() };
+    chased.set(it.id, { n: c.n + 1, at: Date.now() });
+    await p.collectDrops(4, 8000).catch(() => {});
     return undefined;   // the pickup itself is visible in the inventory; no need to narrate it
   },
 };

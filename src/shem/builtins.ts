@@ -43,7 +43,7 @@ export const GETTERS: GetterSpec[] = [
 
 export const BUILTINS: BuiltinSpec[] = [
   // ---- perception ----------------------------------------------------------------
-  { name: "block_at", params: [p("pos", "pos")], returns: "block", doc: "Block record at a position: .id .short .air .solid .liquid .pos", blocking: true },
+  { name: "block_at", params: [p("pos", "pos")], returns: "block", doc: "Block record at a position: .name (\"stone\") .id (\"minecraft:stone\") .air .solid .liquid .pos", blocking: true },
   { name: "find_blocks", params: [p("kinds", "block"), p("radius", "int", "32"), p("max", "int", "32")], returns: "list<block>", doc: "Nearest blocks of a kind (or list of kinds), nearest first; each has .pos .block .dist", blocking: true },
   { name: "find_entities", params: [p("kinds", "entity", "none"), p("radius", "float", "16"), p("hostile", "bool", "false")], returns: "list<entity>", doc: "Nearby entities, nearest first: .id .type .short .name .pos .dist .hostile .health", blocking: true },
   { name: "nearest", params: [p("kinds", "entity", "none"), p("radius", "float", "16")], returns: "entity?", doc: "Nearest entity of the kinds, or none.", blocking: true },
@@ -71,14 +71,14 @@ export const BUILTINS: BuiltinSpec[] = [
   { name: "stop", params: [], returns: "none", doc: "Stop moving, mining, pathing, using.", blocking: true },
   { name: "flee", params: [p("from", "any"), p("dist", "float", "16")], returns: "record", doc: "Move away from a pos, entity or list of them.", blocking: true },
   { name: "wander", params: [p("radius", "int", "12")], returns: "record", doc: "Walk to a random nearby XZ.", blocking: true },
-  { name: "explore", params: [], returns: "none", doc: "Baritone explore until stop().", blocking: true },
-  { name: "goto_surface", params: [], returns: "none", doc: "Climb to the surface.", blocking: true },
+  { name: "explore", params: [p("for", "dur", "none")], returns: "none", doc: "Baritone explore. explore(for: 2m) blocks that long then stops; without `for` it returns at once and runs until stop().", blocking: true },
+  { name: "goto_surface", params: [], returns: "record", doc: "Climb to the surface: .y .rose. Fails with `unreachable` when sealed in.", blocking: true },
   { name: "dig_down", params: [p("n", "int")], returns: "none", doc: "Dig straight down n blocks, checking for lava and air below.", blocking: true, stub: true },
   { name: "tunnel", params: [p("dir", "string"), p("n", "int")], returns: "none", doc: "Tunnel n blocks in a direction.", blocking: true, stub: true },
 
   // ---- actions ---------------------------------------------------------------------
   { name: "mine", params: [p("pos", "pos"), p("collect", "bool", "true")], returns: "record", doc: "Break one block (walks there, best tool, collects the drop).", blocking: true },
-  { name: "mine_all", params: [p("kind", "block"), p("want", "int", "1"), p("timeout", "dur", "5m")], returns: "record", doc: "Mine a block kind until `want` of its drop are collected: .got .item", blocking: true },
+  { name: "mine_all", params: [p("kind", "block"), p("want", "int", "1"), p("timeout", "dur", "5m")], returns: "record", doc: "Baritone mines a block kind until `want` of its drop are collected: .got .item. Good for common blocks (stone, logs); for ore you can already see, `for (b of find_blocks(kind)) mine(b.pos)` is faster and won't wander.", blocking: true },
   { name: "place", params: [p("item", "item"), p("pos", "pos")], returns: "record", doc: "Place an item so it occupies pos.", blocking: true },
   { name: "place_here", params: [p("item", "item")], returns: "record", doc: "Place an item at your feet after stepping aside.", blocking: true },
   { name: "use_item", params: [p("hand", "string", '"main"')], returns: "none", doc: "Right-click with what you hold.", blocking: true },

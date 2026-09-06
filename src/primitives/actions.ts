@@ -14,6 +14,9 @@ import { recordChest } from "../world/chests.ts";
 
 const REACH = 4.5;
 
+/** Clef's container slots render items as "minecraft:coal x7"; strip the count to compare ids. */
+export function slotItemId(item: string): string { return item.replace(/\s+x\d+$/, ""); }
+
 async function approach(ctx: Ctx, p: Pos, reach = 3, timeoutMs = 30_000): Promise<void> {
   if (dist(ctx.mirror.eye, center(p)) <= REACH) return;
   await goto(ctx, p, { reach, timeoutMs });
@@ -380,10 +383,15 @@ export async function smelt(ctx: Ctx, item: string, n = 1, opts: SmeltOpts = {})
         ctx.token.throwIfCancelled();
         const c = await container(ctx);
         const out = c.slots.find((sl) => sl.slot === 2);
-        got = out && out.item === fullId(output) ? out.count : 0;
+        got = out && slotItemId(out.item) === fullId(output) ? out.count : 0;
         if (got >= n) break;
         const inSlot = c.slots.find((sl) => sl.slot === 0);
-        if ((!inSlot || inSlot.item === "empty" || inSlot.item === "minecraft:air") && got > 0) break;   // ran out of input
+        const inEmpty = !inSlot || inSlot.item === "empty" || inSlot.item === "minecraft:air";
+        if (inEmpty && got > 0) break;   // ran out of input
+        if (inEmpty && got === 0 && Date.now() - t0 > 4000) {
+          // Nothing cooking and nothing done: the deposit didn't land (wrong slot, full furnace).
+          throw new GolemError("failed", `furnace has no ${input} in its input slot after depositing; is it full or did the fuel go in the wrong slot?`);
+        }
         if (Date.now() - t0 > timeoutMs) break;
         await sleep(2000, ctx.token);
       }
@@ -450,9 +458,14 @@ export async function collectDrops(ctx: Ctx, radius = 6, timeoutMs = 20_000): Pr
       const items = (await entities(ctx, { radius })).filter((e) => e.isItem);
       if (!items.length || Date.now() - t0 > timeoutMs) return { visited };
       const it = items[0]!;
-      await goto(ctx, { x: Math.floor(it.x), y: Math.floor(it.y), z: Math.floor(it.z) }, { reach: 1, timeoutMs: 8000, retry: false }).catch(() => {});
+      await goto(ctx, { x: Math.floor(it.x), y: Math.floor(it.y), z: Math.floor(it.z) }, { reach: 1, exact: true, timeoutMs: 8000, retry: false }).catch(() => {});
+      // Pickup radius is about a block; stopping on the edge misses. Step onto the item's exact spot.
+      if (dist(ctx.mirror.pos, { x: it.x, y: it.y, z: it.z }) > 0.8) {
+        await lookAt(ctx, { x: it.x, y: it.y, z: it.z }).catch(() => {});
+        await move(ctx, "forward", 250).catch(() => {});
+      }
       visited++;
-      await sleep(300, ctx.token);
+      await sleep(400, ctx.token);
     }
   });
 }

@@ -11,6 +11,8 @@ import { inventory } from "./inventory.ts";
 export interface GotoOpts {
   /** Stop when within this many blocks of the target (default 1 = stand on it). */
   reach?: number;
+  /** Arrive only when standing in the target's column (for picking things up). */
+  exact?: boolean;
   timeoutMs?: number;
   /** Re-issue the goal once if Baritone gives up early (default true). */
   retry?: boolean;
@@ -91,6 +93,7 @@ export async function goto(ctx: Ctx, target: Pos | { x: number; z: number }, opt
   const arrived = () => {
     const p = ctx.mirror.pos;
     const feet: Vec = { x: p.x, y: p.y + 0.5, z: p.z };
+    if (opts.exact) return distXZ(p, goal) <= 0.6 && Math.abs(p.y - (goal.y - 0.5)) <= 1.5;
     return hasY ? dist(feet, goal) <= reach + 0.75 : distXZ(p, goal) <= reach + 0.75;
   };
   const send = async () => {
@@ -185,16 +188,28 @@ export async function flee(ctx: Ctx, from: Vec | Vec[], n = 16, opts: GotoOpts =
   return gotoXZ(ctx, away.x, away.z, { reach: 2, timeoutMs: 20_000, ...opts });
 }
 
-export async function surface(ctx: Ctx, opts: { timeoutMs?: number } = {}): Promise<void> {
-  await ctx.activity.run("surface", async () => {
+export async function surface(ctx: Ctx, opts: { timeoutMs?: number } = {}): Promise<{ y: number; rose: number }> {
+  return ctx.activity.run("surface", async () => {
+    const y0 = ctx.mirror.pos.y;
     await baritone(ctx, "surface");
-    await waitNav(ctx, { timeoutMs: opts.timeoutMs ?? 120_000, what: "surface" });
+    const r = await waitNav(ctx, { timeoutMs: opts.timeoutMs ?? 120_000, what: "surface" });
+    await ctx.mirror.refresh().catch(() => {});
+    const rose = ctx.mirror.pos.y - y0;
+    const skyAbove = await blockAt(ctx, { ...ctx.mirror.blockPos, y: ctx.mirror.blockPos.y + 2 }).then((b) => b.air).catch(() => true);
+    if (!r.started || (rose < 1 && !skyAbove)) throw new GolemError("unreachable", `no way up from y=${y0.toFixed(0)} (sealed in? dig or open a door first)`);
+    return { y: ctx.mirror.pos.y, rose };
   });
 }
 
-export async function explore(ctx: Ctx): Promise<void> {
+/** Baritone explore. With `forMs`, blocks that long and then stops; otherwise returns at once (stop() ends it). */
+export async function explore(ctx: Ctx, forMs?: number): Promise<void> {
   await baritone(ctx, "explore");
   ctx.mirror.navActive = true;
+  if (forMs) {
+    await ctx.activity.run("explore", async () => {
+      try { await sleep(forMs, ctx.token); } finally { await navStop(ctx); }
+    });
+  }
 }
 
 /**

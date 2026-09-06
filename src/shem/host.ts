@@ -19,7 +19,7 @@ function entityRecord(e: Entity): Record_ {
   return { id: e.id, type: e.type, short: e.short, name: e.name, pos: new Vec3(e.x, e.y, e.z, false), dist: e.distance, hostile: e.hostile, is_player: e.isPlayer, is_item: e.isItem, health: e.health ?? null };
 }
 function blockRecord(b: { id: string; short: string; air: boolean; solid: boolean; liquid: boolean; pos: { x: number; y: number; z: number } }): Record_ {
-  return { id: b.id, short: b.short, block: b.id, air: b.air, solid: b.solid, liquid: b.liquid, pos: new Vec3(b.pos.x, b.pos.y, b.pos.z, true) };
+  return { id: b.id, name: b.short, short: b.short, block: b.id, air: b.air, solid: b.solid, liquid: b.liquid, pos: new Vec3(b.pos.x, b.pos.y, b.pos.z, true) };
 }
 function kindsArg(v: Value | undefined): string[] | undefined {
   if (v === undefined || v === null) return undefined;
@@ -63,11 +63,12 @@ export function makeShemHost(rt: AgentRuntime): Host {
     };
   };
   const containerView = (c: { handler: string; slots: { slot: number; item: string; count: number }[]; trades?: unknown[] }): Record_ => {
-    const own = c.slots.slice(0, Math.max(0, c.slots.length - 36)).filter((s) => s.item && s.item !== "empty" && s.item !== "minecraft:air");
+    const clean = (it: string) => it.replace(/\s+x\d+$/, "");
+    const own = c.slots.slice(0, Math.max(0, c.slots.length - 36)).filter((s) => s.item && clean(s.item) !== "empty" && clean(s.item) !== "minecraft:air");
     return {
       handler: c.handler,
-      slots: own.map((s) => ({ slot: s.slot, item: s.item, short: shortId(s.item), count: s.count })) as Value,
-      count: ((item: Value) => { const id = toStr(item).includes(":") ? toStr(item) : `minecraft:${toStr(item)}`; return own.filter((s) => s.item === id).reduce((a, s) => a + s.count, 0); }) as unknown as Value,
+      slots: own.map((s) => ({ slot: s.slot, item: clean(s.item), name: shortId(clean(s.item)), short: shortId(clean(s.item)), count: s.count })) as Value,
+      count: ((item: Value) => { const id = toStr(item).includes(":") ? toStr(item) : `minecraft:${toStr(item)}`; return own.filter((s) => clean(s.item) === id).reduce((a, s) => a + s.count, 0); }) as unknown as Value,
       trades: (c.trades ?? []) as Value,
     };
   };
@@ -96,7 +97,7 @@ export function makeShemHost(rt: AgentRuntime): Host {
   def("find_blocks", async (p, a, n) => {
     const kinds = kindsArg(arg(a, n, 0, "kinds")) ?? [];
     const hits = await p.findBlocks(kinds, { radius: toNum(arg(a, n, 1, "radius") ?? 32), max: toNum(arg(a, n, 2, "max") ?? 32) });
-    return hits.map((h) => ({ block: h.block, short: shortId(h.block), pos: new Vec3(h.x, h.y, h.z, true), dist: h.dist }));
+    return hits.map((h) => ({ block: h.block, name: shortId(h.block), short: shortId(h.block), pos: new Vec3(h.x, h.y, h.z, true), dist: h.dist }));
   });
   def("find_entities", async (p, a, n) => (await p.entities({ kinds: kindsArg(arg(a, n, 0, "kinds")), radius: toNum(arg(a, n, 1, "radius") ?? 16), hostileOnly: !!arg(a, n, 2, "hostile") })).map(entityRecord));
   def("nearest", async (p, a, n) => { const e = (await p.entities({ kinds: kindsArg(arg(a, n, 0, "kinds")), radius: toNum(arg(a, n, 1, "radius") ?? 16) }))[0]; return e ? entityRecord(e) : null; });
@@ -124,8 +125,8 @@ export function makeShemHost(rt: AgentRuntime): Host {
   def("stop", async (p) => { await p.stop(); return null; });
   def("flee", async (p, a, n) => { const from = arg(a, n, 0, "from") ?? null; const pts = (Array.isArray(from) ? from : [from]).map((v) => toVec(v).plain); const r = await p.flee(pts, toNum(arg(a, n, 1, "dist") ?? 16)); return { pos: new Vec3(r.pos.x, r.pos.y, r.pos.z, false) }; });
   def("wander", async (p, a, n) => { const r = toNum(arg(a, n, 0, "radius") ?? 12); const m = rt.mirror.pos; const ang = Math.random() * Math.PI * 2; const res = await p.gotoXZ(m.x + Math.cos(ang) * r, m.z + Math.sin(ang) * r, { reach: 2, timeoutMs: 30_000 }); return { pos: new Vec3(res.pos.x, res.pos.y, res.pos.z, false) }; });
-  def("explore", async (p) => { await p.explore(); return null; });
-  def("goto_surface", async (p) => { await p.surface(); return null; });
+  def("explore", async (p, a, n) => { const d = arg(a, n, 0, "for"); await p.explore(d == null ? undefined : toDur(d)); return null; });
+  def("goto_surface", async (p) => { const r = await p.surface(); return { y: r.y, rose: r.rose }; });
 
   // ---- actions ----
   def("mine", async (p, a, n) => { const r = await p.mine(posOf(arg(a, n, 0, "pos") ?? null), { collect: arg(a, n, 1, "collect") !== false }); return { broken: r.broken, block: r.block, ms: r.ms }; });
