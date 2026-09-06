@@ -31,7 +31,7 @@ Mindcraft is good and Golem steals its best ideas: profiles, modes, a code sandb
 
 ## Status
 
-M0 and M1 done, M2 running (see `docs/ROADMAP.md`). `golem up Clay` boots a body, joins the dev server, spawns Claude Code over ACP with the Golem MCP server attached, and turns world events into prompt turns; `golem talk Clay` chats with it through the bridge. Shem (M3) is in: the mind writes `.shem` scripts into its workspace, checks and runs them through `shem_*` tools, and the standard library in `shem/lib/` is written in Shem itself. `docs/DEV.md` is the quickstart; `docs/ARCHITECTURE.md` records the decisions.
+M0 through M3 done, M4 (fleet and comms) in progress, M5 (evals, dashboard) mostly in (see `docs/ROADMAP.md`). `golem up Clay` boots a body, joins the dev server, spawns Claude Code over ACP with the Golem MCP server attached, and turns world events into prompt turns; `golem talk Clay` chats with it through the bridge. Shem (M3) is in: the mind writes `.shem` scripts into its workspace, checks and runs them through `shem_*` tools, and the standard library in `shem/lib/` is written in Shem itself. Two golems run in one `golem up`, talk over an agent bus, and share a chest index and task board. `docs/DEV.md` is the quickstart; `docs/ARCHITECTURE.md` records the decisions.
 
 ## Planned layout
 

@@ -82,3 +82,9 @@ Golem also refuses to drive a body that isn't its own: ours always require a tok
 ## Reading a production body
 
 The launcher runs an obfuscated client, so screen names come back as `class_424` and friends (CLEF-CHANGES #17). Dev clients (`./gradlew runClient` in Clef) show real names. Golem never keys logic on them.
+
+## Restarting the fleet in place
+
+`scripts/restart-up.sh [agent...]` stops `golem up` gracefully, refuses to relaunch while any body process or control port survives, relaunches, and waits for the fleet. Sessions resume from `data/<agent>/session.json`. Use it instead of killing and relaunching by hand: a body left behind keeps its username logged in and gets its replacement kicked with "logged in from another location".
+
+Evals run beside the live fleet on their own agent and ports: `bin/golem eval tasks/basic Tester --config golem.eval.toml --label <name>`, then `bin/golem eval-report`.
