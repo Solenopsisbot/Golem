@@ -23,7 +23,7 @@ command = "npx"
 args = ["-y", "@agentclientprotocol/claude-agent-acp"]
 env = {}                       # extra env for the agent process (ANTHROPIC_API_KEY, CLAUDE_CONFIG_DIR, ...)
 permission_mode = "bypass"
-compact_window = 150000        # Claude Code auto-compacts near this many tokens of context (CLAUDE_CODE_AUTO_COMPACT_WINDOW); 0 = harness default     # requested session mode; Golem still answers escalations by policy
+compact_window = 100000        # Claude Code auto-compacts near this many tokens of context (CLAUDE_CODE_AUTO_COMPACT_WINDOW); 0 = harness default     # requested session mode; Golem still answers escalations by policy
 allow_shell = true
 model = ""                     # legacy single model (unused when models.* are set)
 effort = ""

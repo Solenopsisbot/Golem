@@ -41,6 +41,8 @@ export class Mirror {
   mineDone: { x: number; y: number; z: number; broken: boolean; reason?: string; at: number } | null = null;
   /** Who hit us last (entityHurt with self:true). */
   lastAttacker: { id: number; type: string; at: number } | null = null;
+  /** Where the body last stood out of water and lava: the drowning escape goes back there. */
+  lastDryPos: { x: number; y: number; z: number } | null = null;
   lastPickup: { item: string; count: number; at: number } | null = null;
   lastSleep: { ok: boolean; reason?: string; at: number } | null = null;
   phase: "dawn" | "day" | "dusk" | "night" | undefined;
@@ -154,6 +156,7 @@ export class Mirror {
       this.setPos(p.x, p.y, p.z);
       this.yaw = p.yaw; this.pitch = p.pitch;
       this.health = p.health; this.food = p.food;
+      if (!p.inWater && !p.inLava && this.inWorld && !this.dead) this.lastDryPos = { x: this.blockPos.x, y: this.blockPos.y, z: this.blockPos.z };
       this.dimension = p.dimension;
       this.heldItem = p.heldItem;
       this.selectedSlot = p.selectedSlot;

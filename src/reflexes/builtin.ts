@@ -40,7 +40,15 @@ export const selfPreservation: Reflex<Danger> = {
   async act(p, d) {
     const ctx = p.ctx;
     if (d.kind === "lava" || d.kind === "drowning") {
-      // Up and back is the least-wrong universal move.
+      // Back to the last place the body stood dry: Baritone swims and climbs; "step back and jump"
+      // put a golem back into a flooded pocket five times in a row until it drowned at full health.
+      const dry = ctx.mirror.lastDryPos;
+      if (dry && dist(dry, ctx.mirror.blockPos) <= 24) {
+        try {
+          await p.goto(dry, { timeoutMs: 8000 });
+          return `${d.kind}: back to dry ground at ${fmtPos(dry)}`;
+        } catch { /* fall through to the blind move */ }
+      }
       await p.move("backward", 600, { jump: true, sprint: true });
       await p.jump();
       return `${d.kind}: jumped back`;
