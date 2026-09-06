@@ -26,6 +26,12 @@ export const ClefSection = z.object({
   base_port: z.number().int().default(8731),
 });
 
+/** A model choice for a kind of turn. `model` and `effort` are matched as substrings against what the agent advertises ("fable", "opus", "high"). Empty = leave the agent's default. */
+export const ModelProfile = z.object({
+  model: z.string().default(""),
+  effort: z.string().default(""),
+});
+
 export const MindSection = z.object({
   command: z.string().default("npx"),
   args: z.array(z.string()).default(["-y", "@agentclientprotocol/claude-agent-acp"]),
@@ -34,6 +40,11 @@ export const MindSection = z.object({
   allow_shell: z.boolean().default(true),
   model: z.string().default(""),
   effort: z.string().default(""),
+  /** Two-tier model routing: `plan` turns (owner asks, deaths, goal changes, failures, every Nth turn, or when the agent calls plan_next) vs `act` turns (everything else). */
+  models: z.object({
+    plan: ModelProfile.prefault({ model: "fable", effort: "high" }),
+    act: ModelProfile.prefault({ model: "opus", effort: "" }),
+  }).prefault({}),
   budget: z.object({
     tokens_per_hour: z.number().default(2_000_000),
     turns_per_hour: z.number().default(120),
@@ -43,6 +54,10 @@ export const MindSection = z.object({
 export const DriveSection = z.object({
   interrupt_priority: z.number().int().default(80),
   idle_wake: DurationString.default("90s"),
+  /** Idle wake backs off (doubling) toward this when consecutive goal turns did nothing. */
+  idle_wake_max: DurationString.default("10m"),
+  /** Force a planning-model turn at least this often (turns). 0 = never by count. */
+  plan_every: z.number().int().default(12),
   sleep_when_idle: z.boolean().default(true),
   cancel_runs_on_turn_cancel: z.boolean().default(false),
   inbox_max: z.number().int().default(40),

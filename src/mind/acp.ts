@@ -44,6 +44,10 @@ export class Mind {
   caps: acp.AgentCapabilities = {};
   /** True when start() resumed a previous session instead of opening a fresh one. */
   resumed = false;
+  /** Session config options the agent advertised (model, effort, ...). */
+  configOptions: acp.SessionConfigOption[] = [];
+  /** The profile currently applied ("plan" | "act" | ""), so switches are no-ops when unchanged. */
+  profile = "";
   private turn: Promise<TurnResult> | null = null;
   private stopping = false;
   private releaseConnection: (() => void) | undefined;
@@ -135,6 +139,7 @@ export class Mind {
         const resp = await ctx.request(acp.methods.agent.session.load, { sessionId: saved.sessionId, cwd, mcpServers });
         const attach = (ctx as unknown as { attachSession(r: { sessionId: string; modes?: acp.SessionModeState | null }): acp.ActiveSession }).attachSession;
         const session = attach.call(ctx, { sessionId: saved.sessionId, modes: resp?.modes ?? null });
+        this.configOptions = resp?.configOptions ?? [];
         this.resumed = true;
         return session;
       } catch (e) {
@@ -142,10 +147,47 @@ export class Mind {
       }
     }
     const session = await ctx.buildSession({ cwd, mcpServers }).start();
+    this.configOptions = session.newSessionResponse.configOptions ?? [];
     this.resumed = false;
     const record: SavedSession = { sessionId: session.sessionId, command: agent.mind.command, args: agent.mind.args, savedAt: Date.now() };
     try { writeFileSync(this.sessionFile, JSON.stringify(record, null, 2) + "\n"); } catch (e) { this.log.warn(`could not save session id: ${(e as Error).message}`); }
     return session;
+  }
+
+  /** Human-readable list of the select options the agent offers (for logs). */
+  describeOptions(): string {
+    return this.configOptions.map((o) => o.type === "select" ? `${o.id}=${o.currentValue} [${flatOptions(o.options ?? []).map((x) => x.value).join(", ")}]` : `${o.id}=${String((o as { currentValue?: unknown }).currentValue)}`).join("; ") || "(none)";
+  }
+
+  /**
+   * Switch model/effort to a named profile from config (`mind.models.plan` / `.act`). Values are
+   * matched as substrings against the agent's advertised options; among several matches the one
+   * with the highest version number wins ("opus" -> claude-opus-5 over claude-opus-4-8).
+   */
+  async useProfile(name: "plan" | "act"): Promise<void> {
+    if (this.profile === name || !this.session || !this.ctx) return;
+    const want = this.opts.agent.mind.models[name];
+    for (const [id, value] of [["model", want.model], ["effort", want.effort]] as const) {
+      if (!value) continue;
+      const opt = this.configOptions.find((o) => o.id === id || o.name.toLowerCase() === id);
+      if (!opt || opt.type !== "select") { this.log.debug(`no ${id} option to set`); continue; }
+      const flat = flatOptions(opt.options ?? []);
+      const pick = pickOption(flat, value);
+      if (!pick) { this.log.warn(`no ${id} matching "${value}" (have: ${flat.map((x) => x.value).join(", ")})`); continue; }
+      if (opt.currentValue === pick) continue;
+      try {
+        const resp = await this.ctx.request(acp.methods.agent.session.setConfigOption, { sessionId: this.session.sessionId, configId: opt.id, value: pick } as never);
+        if (resp?.configOptions) this.configOptions = resp.configOptions;
+        this.log.info(`${name}: ${id} -> ${pick}`);
+      } catch (e) { this.log.warn(`set ${id}=${pick} failed: ${(e as Error).message}`); }
+    }
+    this.profile = name;
+  }
+
+  /** The current model id as the agent reports it. */
+  get currentModel(): string {
+    const o = this.configOptions.find((x) => x.id === "model");
+    return o && o.type === "select" ? String(o.currentValue) : "";
   }
 
   private async applyMode(): Promise<void> {
@@ -222,3 +264,23 @@ export const block = {
   text(text: string): ContentBlock { return { type: "text", text }; },
   image(data: Buffer, mimeType = "image/png"): ContentBlock { return { type: "image", data: data.toString("base64"), mimeType }; },
 };
+
+/** Select options may be grouped; flatten to {value, name}. */
+function flatOptions(opts: unknown[]): { value: string; name?: string | null }[] {
+  const out: { value: string; name?: string | null }[] = [];
+  for (const o of opts as ({ value?: string; name?: string | null; options?: unknown[] })[]) {
+    if (Array.isArray(o.options)) out.push(...flatOptions(o.options));
+    else if (typeof o.value === "string") out.push({ value: o.value, name: o.name });
+  }
+  return out;
+}
+
+/** Substring match on value or name; prefer the highest version number among matches. */
+function pickOption(options: { value: string; name?: string | null }[], want: string): string | null {
+  const w = want.toLowerCase();
+  const hits = options.filter((o) => o.value.toLowerCase().includes(w) || (o.name ?? "").toLowerCase().includes(w));
+  if (!hits.length) return null;
+  const version = (v: string) => { const m = /(\d+)(?:[.-](\d+))?/.exec(v.replace(/^claude-/, "").replace(/-\d{8}$/, "")); return m ? Number(m[1]) * 100 + Number(m[2] ?? 0) : 0; };
+  hits.sort((a, b) => version(b.value) - version(a.value) || a.value.length - b.value.length);
+  return hits[0]!.value;
+}

@@ -33,7 +33,7 @@ export class AgentSession {
     this.agent = agent;
     this.host = host;
     this.log = makeLog(agent.name);
-    this.rt = new AgentRuntime(agent, { reflex: (ev) => this.drive?.onReflex(ev) });
+    this.rt = new AgentRuntime(agent, { reflex: (ev) => { this.drive?.onReflex(ev); for (const l of this.listeners) { try { l({ t: ev.at, type: "reflex", name: ev.name, note: ev.note }); } catch { /* listener's problem */ } } } });
     this.transcript = new Transcript(resolve(agent.dataDir, "transcript.jsonl"));
     ensureWorkspace(agent);
     this.journal = new Journal(agent.workspaceDir);
@@ -65,7 +65,7 @@ export class AgentSession {
     });
     s.drive = new Drive({ rt: s.rt, mind: s.mind, log: s.log.child("drive"), transcript: s.transcript, journal: s.journal, emit });
     s.rt.drive = s.drive;
-    host.register(agent.name, { rt: s.rt, drive: s.drive, shem, token: tokens.mcp, subscribe: (l) => { s.listeners.add(l); return () => s.listeners.delete(l); } });
+    host.register(agent.name, { rt: s.rt, drive: s.drive, shem, token: tokens.mcp, transcriptPath: resolve(agent.dataDir, "transcript.jsonl"), subscribe: (l) => { s.listeners.add(l); return () => s.listeners.delete(l); } });
     shem.runs.onEnd(({ type, run }) => {
       if (!run.background) return;   // foreground runs report back through the tool that started them
       s.drive.push({ kind: type, priority: type === "run_failed" ? 45 : 40, text: describeRun(run, 4) });

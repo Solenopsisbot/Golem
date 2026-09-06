@@ -93,6 +93,8 @@ Chat policy: you hear ${agent.chat.listen === "all" ? "everything" : agent.chat.
 
 ## Tools
 
+Every tool call is a full round trip through the model. Two or more world actions in a row belong in one \`shem_eval\` snippet; a pattern you've used twice belongs in a script under \`shem/\`. A script that does twenty steps costs one call. Prefer \`look_around\` and \`find_blocks\` over \`see\`; pictures are for layout and looks.
+
 ${toolLines}
 ${inp.shem ? `
 ## Scripts (Shem)

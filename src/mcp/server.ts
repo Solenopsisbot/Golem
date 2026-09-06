@@ -4,9 +4,15 @@
 //   /agents/<name>/say      POST {text}                             speak in game (bridge)
 //   /agents/<name>/status   GET                                     one-line state (bridge)
 //   /agents/<name>/events   GET  text/event-stream                  live transcript + events (bridge)
-// All routes require `Authorization: Bearer <agent mcp token>`. Bound to 127.0.0.1 by default.
+//   /agents/<name>/dash     GET  the dashboard page (token in ?token=, remembered by the page)
+//   /agents/<name>/runs, /reflexes (GET/POST), /inbox (GET), /transcript, /shot, /met   dashboard data
+// All routes require `Authorization: Bearer <agent mcp token>` (or ?token= on GET, for the browser).
+// Bound to 127.0.0.1 by default.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { AgentRuntime } from "../agent/runtime.ts";
@@ -21,6 +27,7 @@ export interface HostedAgent {
   drive: Drive;
   shem?: ShemEngine;
   token: string;
+  transcriptPath?: string;
   /** Subscribe to bridge events (transcript lines, inbox pushes). Returns unsubscribe. */
   subscribe(listener: (ev: BridgeEvent) => void): () => void;
 }
@@ -63,21 +70,67 @@ export class GolemHttpHost {
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", `http://${this.host}:${this.port}`);
-    const m = /^\/agents\/([^/]+)\/(mcp|inbox|say|status|events)$/.exec(url.pathname);
+    if (url.pathname === "/" || url.pathname === "/agents") {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(`<!doctype html><meta charset=utf-8><title>Golem</title><body style="font:14px system-ui;background:#141518;color:#e6e6e6;padding:2em"><h1 style="color:#c9a227">Golem</h1><p>Agents: ${[...this.agents.keys()].map((n) => `<a style="color:#7fb3ff" href="/agents/${encodeURIComponent(n)}/dash">${n}</a>`).join(", ") || "none"}</p><p style="color:#9aa0a8">Open an agent with <code>?token=&lt;mcp token from data/&lt;name&gt;/tokens.json&gt;</code> the first time; the page remembers it.</p>`);
+      return;
+    }
+    const m = /^\/agents\/([^/]+)\/(mcp|inbox|say|status|events|dash|runs|reflexes|transcript|shot|met)$/.exec(url.pathname);
     if (!m) { res.writeHead(404, { "content-type": "text/plain" }); res.end("not found"); return; }
     const name = decodeURIComponent(m[1]!);
     const route = m[2]!;
     const hosted = this.agents.get(name);
     if (!hosted) { res.writeHead(404, { "content-type": "text/plain" }); res.end(`no agent ${name}`); return; }
     const auth = req.headers.authorization ?? "";
-    if (auth !== `Bearer ${hosted.token}`) { res.writeHead(401, { "content-type": "text/plain" }); res.end("unauthorized"); return; }
+    const queryToken = url.searchParams.get("token");
+    const authed = auth === `Bearer ${hosted.token}` || (req.method === "GET" && queryToken === hosted.token);
+    if (route === "dash") {
+      // The page itself is public (it holds no secrets); everything it fetches needs the token.
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(dashboardHtml());
+      return;
+    }
+    if (!authed) { res.writeHead(401, { "content-type": "text/plain" }); res.end("unauthorized"); return; }
     switch (route) {
       case "mcp": return this.handleMcp(req, res, name, hosted);
-      case "inbox": return this.handleInbox(req, res, hosted);
+      case "inbox": return req.method === "GET" ? this.json(res, hosted.drive.inbox.snapshot().map((i) => ({ id: i.id, t: i.t, kind: i.kind, priority: i.priority, from: i.from, text: i.text }))) : this.handleInbox(req, res, hosted);
       case "say": return this.handleSay(req, res, hosted);
       case "status": { res.writeHead(200, { "content-type": "text/plain" }); res.end(hosted.drive.stateHeader() + "\n"); return; }
       case "events": return this.handleEvents(req, res, hosted);
+      case "runs": return this.json(res, (hosted.shem?.runs.list() ?? []).slice(0, 20).map((r) => ({ id: r.id, label: r.label, script: r.script, priority: r.priority, background: r.background, status: r.status, current: r.current, startedAt: r.startedAt, endedAt: r.endedAt })));
+      case "reflexes": {
+        if (req.method === "POST") {
+          const b = (await this.readJson(req)) as { name?: string; on?: boolean } | undefined;
+          if (!b?.name) { res.writeHead(400); res.end("name required"); return; }
+          try { hosted.rt.reflexes.enable(b.name, b.on !== false); } catch (e) { res.writeHead(404); res.end((e as Error).message); return; }
+        }
+        return this.json(res, hosted.rt.reflexes.list());
+      }
+      case "transcript": {
+        const limit = Number(url.searchParams.get("limit") ?? 150);
+        if (!hosted.transcriptPath || !existsSync(hosted.transcriptPath)) return this.json(res, []);
+        const lines = readFileSync(hosted.transcriptPath, "utf8").trim().split("\n").slice(-limit);
+        return this.json(res, lines.map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean));
+      }
+      case "shot": {
+        const dir = hosted.rt.agent.shotsDir;
+        if (url.searchParams.get("fresh")) {
+          try { const r = await hosted.rt.p.screenshot({ width: 960, height: 540 }); res.writeHead(200, { "content-type": "image/png", "cache-control": "no-store" }); res.end(r.png); return; }
+          catch (e) { res.writeHead(500, { "content-type": "text/plain" }); res.end((e as Error).message); return; }
+        }
+        const latest = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".png")).map((f) => ({ f, t: statSync(resolve(dir, f)).mtimeMs })).sort((a, b) => b.t - a.t)[0] : undefined;
+        if (!latest) { res.writeHead(404, { "content-type": "text/plain" }); res.end("no screenshot yet"); return; }
+        res.writeHead(200, { "content-type": "image/png", "cache-control": "no-store" });
+        res.end(readFileSync(resolve(dir, latest.f)));
+        return;
+      }
+      case "met": { await hosted.rt.met(); await hosted.drive.mindCancel(); return this.json(res, { ok: true }); }
     }
+  }
+
+  private json(res: ServerResponse, body: unknown): void {
+    res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+    res.end(JSON.stringify(body));
   }
 
   private async readJson(req: IncomingMessage): Promise<unknown> {
@@ -169,4 +222,12 @@ function buildMcpServer(name: string, hosted: HostedAgent): McpServer {
   server.registerResource("status", `golem://${name}/status`, { description: "Current state line" }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/plain", text: hosted.drive.stateHeader() }] }));
   server.registerResource("inbox", `golem://${name}/inbox`, { description: "Unread inbox" }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/plain", text: hosted.drive.peekInbox() }] }));
   return server;
+}
+
+let dashboardCache: string | undefined;
+function dashboardHtml(): string {
+  if (!dashboardCache || process.env.GOLEM_DEV) {
+    dashboardCache = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../dashboard/index.html"), "utf8");
+  }
+  return dashboardCache;
 }

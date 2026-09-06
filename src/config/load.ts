@@ -78,7 +78,7 @@ export function resolveAgent(loaded: LoadedConfig, name: string): AgentConfig {
       max_heap: a.body.max_heap ?? clef.max_heap,
     },
     clef: { ...clef, launcher: resolve(rootDir, clef.launcher) },
-    mind: { ...config.mind, ...defined(a.mind), budget: { ...config.mind.budget, ...defined(a.mind?.budget) } },
+    mind: { ...config.mind, ...defined(a.mind), budget: { ...config.mind.budget, ...defined(a.mind?.budget) }, models: { plan: { ...config.mind.models.plan, ...defined(a.mind?.models?.plan) }, act: { ...config.mind.models.act, ...defined(a.mind?.models?.act) } } },
     drive: { ...config.drive, ...defined(a.drive) },
     chat: { ...config.chat, ...defined(a.chat) },
     players: config.players,

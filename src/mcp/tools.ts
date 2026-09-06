@@ -133,6 +133,8 @@ export const TOOLS: ToolDef[] = [
     async run(a, { rt, drive }) { writeGoal(rt.agent, a.text); drive.goal = a.text; return ok(`goal: ${a.text}`); } }),
   def({ name: "goal_clear", description: "Clear the standing goal.", input: {},
     async run(_a, { rt, drive }) { writeGoal(rt.agent, ""); drive.goal = ""; return ok("goal cleared" + (readGoal(rt.agent) ? "" : "")); } }),
+  def({ name: "plan_next", description: "Ask for your next turn to run on the stronger planning model. Use before a big decision (where to build, a long expedition, what to do after repeated failures). Say why in one line, then end your turn right after calling this.", input: { reason: z.string().optional() },
+    async run(a, { drive, rt }) { drive.escalateNext = true; rt.trace.mark("plan_next", { reason: a.reason }); return ok("Noted. End your turn now; the next one runs on the planning model."); } }),
   def({ name: "met", description: "Stop everything immediately: movement, mining, pathing, reflex actions.", input: {},
     async run(_a, { rt }) { await rt.met(); return ok("met. everything stopped."); } }),
 ];
@@ -153,7 +155,7 @@ export const SHEM_TOOLS: ToolDef[] = [
   def({ name: "shem_eval", description: "Run a Shem snippet (statements, or a whole file with script declarations) without saving it. Good for one-off actions and for trying a script before writing it.", input: { code: z.string(), params: paramsShape, timeout_s: z.number().min(1).max(3600).default(120), background: z.boolean().default(false) },
     async run(a, tc) { const e = needShem(tc); const run = e.eval(a.code, (a.params ?? {}) as Record<string, never>, { background: a.background, timeoutMs: Math.max(a.timeout_s, 600) * 1000 }); if (a.background) return ok(`started ${run.id} in the background`); return ok(await e.wait(run, a.timeout_s * 1000)); } }),
   def({ name: "shem_status", description: "Status and trace tail of a run.", input: { run: z.string() },
-    async run(a, tc) { const r = needShem(tc).runs.get(a.run); if (!r) throw new GolemError("not_found", `no run ${a.run}`); return ok(describeRun(r)); } }),
+    async run(a, tc) { const r = needShem(tc).runs.get(a.run); if (!r) throw new GolemError("not_found", `no run ${a.run}`); return ok(describeRun(r, 30, true)); } }),
   def({ name: "shem_wait", description: "Wait for a run to end (bounded).", input: { run: z.string(), timeout_s: z.number().min(1).max(3600).default(120) },
     async run(a, tc) { const e = needShem(tc); const r = e.runs.get(a.run); if (!r) throw new GolemError("not_found", `no run ${a.run}`); return ok(await e.wait(r, a.timeout_s * 1000)); } }),
   def({ name: "shem_cancel", description: "Cancel a run, or every active run when omitted.", input: { run: z.string().optional() },

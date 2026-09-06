@@ -117,6 +117,7 @@ async function main(): Promise<void> {
       }));
       log.info(`up: ${sessions.map((s) => s.rt.mirror.summary(s.agent.name)).join(" || ")}`);
       log.info(`bridge: http://${host.host}:${host.port}/agents/<name>/{inbox,say,status,events} (bearer token in data/<name>/tokens.json)`);
+      for (const s of sessions) log.info(`dashboard: http://${host.host}:${host.port}/agents/${encodeURIComponent(s.agent.name)}/dash?token=${ensureTokens(s.agent).mcp}`);
       await new Promise(() => {}); // run until signalled
       return;
     }

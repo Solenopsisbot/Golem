@@ -135,7 +135,7 @@ export async function runShellCommand(rt: AgentRuntime, line: string): Promise<s
       case "check": { const e = rt.shem; if (!e || !args[0]) throw new GolemError("failed", "check <file>"); return e.check(args[0]).text; }
       case "eval": { const e = rt.shem; if (!e) throw new GolemError("unsupported", "no Shem engine"); const run = e.eval(rest, {}, { interrupt: true }); return e.wait(run, 600_000); }
       case "runs": { const e = rt.shem; if (!e) throw new GolemError("unsupported", "no Shem engine"); const rs = e.runs.list().slice(0, 15); return rs.length ? rs.map((r) => `${r.id} ${r.label} p${r.priority}${r.background ? " bg" : ""}: ${r.status}`).join("\n") : "no runs"; }
-      case "run": { const e = rt.shem; const r = e?.runs.get(args[0] ?? ""); if (!r) throw new GolemError("not_found", `no run ${args[0]}`); return describeRun(r, 30); }
+      case "run": { const e = rt.shem; const r = e?.runs.get(args[0] ?? ""); if (!r) throw new GolemError("not_found", `no run ${args[0]}`); return describeRun(r, 30, true); }
       case "cancel": { const e = rt.shem; if (!e) throw new GolemError("unsupported", "no Shem engine"); return `cancelled ${e.runs.cancel(args[0], "shell cancel")}`; }
       case "doc": { const e = rt.shem; if (!e || !args[0]) throw new GolemError("failed", "doc <name>"); return e.doc(args[0]); }
       case "lib": { const e = rt.shem; if (!e) throw new GolemError("unsupported", "no Shem engine"); return e.list(); }

@@ -44,6 +44,12 @@ export class Drive {
   private readonly turnTimes: number[] = [];
   private readonly tokenSpend: { t: number; n: number }[] = [];
   private currentTurnText = "";
+  /** Set by the plan_next tool: the next turn runs on the planning profile. */
+  escalateNext = false;
+  private turnToolCalls = 0;
+  private turnsSincePlan = 0;
+  private emptyGoalTurns = 0;
+  private lastTurnWasGoalTick = false;
 
   constructor(opts: DriveOptions) {
     this.rt = opts.rt;
@@ -82,6 +88,8 @@ export class Drive {
   }
 
   peekInbox(): string { return renderInbox(this.inbox.snapshot()); }
+  /** Cancel the mind's current turn (used by met from the bridge). */
+  async mindCancel(): Promise<void> { await this.mind.cancel(); }
 
   /** The `[state]` line at the top of every prompt (and the status tool). */
   stateHeader(): string {
@@ -153,12 +161,14 @@ export class Drive {
     const idleMs = parseDuration(a.drive.idle_wake);
     while (this.running) {
       if (this.inbox.empty) {
-        // Nothing to do: wait for a push, or for the goal cadence.
-        const waitMs = this.goal ? Math.max(1000, idleMs - (Date.now() - this.lastTurnEndedAt)) : 3_600_000;
+        // Nothing to do: wait for a push, or for the goal cadence. The cadence doubles every time a
+        // goal turn did nothing (no tool calls), up to idle_wake_max, and resets on real input.
+        const backoff = Math.min(idleMs * 2 ** this.emptyGoalTurns, parseDuration(a.drive.idle_wake_max));
+        const waitMs = this.goal ? Math.max(1000, backoff - (Date.now() - this.lastTurnEndedAt)) : 3_600_000;
         await new Promise<void>((r) => { this.wake = r; setTimeout(r, waitMs); });
         this.wake = null;
         if (!this.running) break;
-        if (this.inbox.empty && this.goal && Date.now() - this.lastTurnEndedAt >= idleMs) {
+        if (this.inbox.empty && this.goal && Date.now() - this.lastTurnEndedAt >= backoff) {
           this.push({ kind: "goal", priority: 10, text: `Nothing new happened. Continue toward your goal: ${this.goal}` });
         }
         if (this.inbox.empty) continue;
@@ -193,17 +203,34 @@ export class Drive {
     return blocks;
   }
 
+  /** Which model tier a turn deserves. Owners, deaths, goal changes, failures, the first turn, a
+   *  plan_next request, or plan_every turns since the last planning turn all get the planning model. */
+  private wantsPlanning(items: InboxItem[]): boolean {
+    if (this.escalateNext) return true;
+    const every = this.rt.agent.drive.plan_every;
+    if (every > 0 && this.turnsSincePlan >= every) return true;
+    return items.some((i) => i.kind === "death" || i.kind === "run_failed" || i.priority >= this.rt.agent.drive.interrupt_priority
+      || (i.kind === "goal" && !!i.from) || (i.kind === "system" && /woke up|resumed/.test(i.text)));
+  }
+
   private async runTurn(): Promise<void> {
     const items = this.inbox.drain();
     const blocks = this.buildPrompt(items);
     const promptText = (blocks[0] as { text: string }).text;
-    this.transcript.add("user", promptText, { items: items.length });
-    this.emit({ type: "prompt", text: promptText });
+    const planning = this.wantsPlanning(items);
+    this.escalateNext = false;
+    await this.mind.useProfile(planning ? "plan" : "act").catch((e) => this.log.warn(`profile switch failed: ${(e as Error).message}`));
+    if (planning) this.turnsSincePlan = 0; else this.turnsSincePlan++;
+    this.lastTurnWasGoalTick = items.length > 0 && items.every((i) => i.kind === "goal" && !i.from);
+    this.turnToolCalls = 0;
+    this.transcript.add("user", promptText, { items: items.length, model: this.mind.currentModel, planning });
+    this.emit({ type: "prompt", text: promptText, model: this.mind.currentModel, planning });
     this.turnStartedAt = Date.now();
     this.turnTimes.push(this.turnStartedAt);
     this.currentTurnText = "";
     try {
       const r = await this.mind.prompt(blocks);
+      if (this.lastTurnWasGoalTick && this.turnToolCalls === 0) this.emptyGoalTurns = Math.min(this.emptyGoalTurns + 1, 8); else this.emptyGoalTurns = 0;
       if (r.usage?.totalTokens) {
         // Agents report every API round trip's input, most of it cache reads; budget the rest.
         const billable = Math.max(0, r.usage.totalTokens - (r.usage.cachedReadTokens ?? 0));
@@ -211,8 +238,8 @@ export class Drive {
       }
       const text = r.text.trim();
       if (text) this.transcript.add("agent", text, { stopReason: r.stopReason });
-      this.emit({ type: "turn_end", stopReason: r.stopReason, text, ms: Date.now() - this.turnStartedAt, tokens: r.usage?.totalTokens ?? null });
-      this.log.info(`turn ended: ${r.stopReason} after ${((Date.now() - this.turnStartedAt) / 1000).toFixed(1)}s${r.usage ? ` (${r.usage.totalTokens} tokens, ${r.usage.cachedReadTokens ?? 0} cached)` : ""}`);
+      this.emit({ type: "turn_end", stopReason: r.stopReason, text, ms: Date.now() - this.turnStartedAt, tokens: r.usage?.totalTokens ?? null, model: this.mind.currentModel, toolCalls: this.turnToolCalls });
+      this.log.info(`turn ended: ${r.stopReason} after ${((Date.now() - this.turnStartedAt) / 1000).toFixed(1)}s, ${this.turnToolCalls} tool calls, ${this.mind.currentModel || "default model"}${planning ? " (planning)" : ""}${r.usage ? ` (${r.usage.totalTokens} tokens, ${r.usage.cachedReadTokens ?? 0} cached)` : ""}`);
       if (r.stopReason === "cancelled") this.push({ kind: "system", priority: 5, text: "(your previous turn was interrupted by what follows)" });
       if (this.rt.agent.chat.speech === "auto" && text) {
         const line = text.split(/\n+/).find((l) => l.trim()) ?? "";
@@ -253,6 +280,7 @@ export class Drive {
 
   /** Recorded by the MCP layer for every Golem tool call. */
   noteToolCall(name: string, args: unknown, result: string, ms: number, isError = false): void {
+    this.turnToolCalls++;
     this.transcript.add("tool", `${name}(${JSON.stringify(args)}) -> ${result}`, { ms, isError });
     this.emit({ type: "golem_tool", name, args, result: result.slice(0, 500), ms, isError });
   }

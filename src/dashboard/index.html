@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Golem</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#141518; --panel:#1c1e23; --line:#2a2d34; --fg:#e6e6e6; --dim:#9aa0a8; --acc:#c9a227; --ok:#5fb56a; --bad:#d9534f; --tool:#7fb3ff; --mono: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+  header { display:flex; gap:16px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; z-index:2; }
+  header h1 { font-size:16px; margin:0; color:var(--acc); }
+  header .state { font-family:var(--mono); font-size:12.5px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+  header button { background:var(--bad); color:#fff; border:0; padding:6px 12px; border-radius:4px; font-weight:600; cursor:pointer; }
+  main { display:grid; grid-template-columns: minmax(0, 1fr) 380px; gap:12px; padding:12px 16px; height: calc(100vh - 50px); }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:6px; display:flex; flex-direction:column; min-height:0; }
+  section h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:0; padding:8px 12px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+  section h2 small { text-transform:none; letter-spacing:0; }
+  #log { overflow:auto; padding:8px 12px; font-family:var(--mono); font-size:12.5px; flex:1; }
+  .ev { padding:3px 0; border-bottom:1px dotted var(--line); white-space:pre-wrap; word-break:break-word; }
+  .ev .t { color:var(--dim); margin-right:8px; }
+  .ev.prompt { color:var(--acc); }
+  .ev.agent { color:var(--fg); }
+  .ev.tool { color:var(--tool); }
+  .ev.tool.err { color:var(--bad); }
+  .ev.turn { color:var(--ok); }
+  .ev.inbox { color:#d7a3ff; }
+  .ev.sys { color:var(--dim); }
+  .ev details summary { cursor:pointer; }
+  aside { display:flex; flex-direction:column; gap:12px; min-height:0; overflow:auto; }
+  .list { padding:8px 12px; font-family:var(--mono); font-size:12px; overflow:auto; }
+  .list div { padding:2px 0; }
+  .list label { display:flex; gap:8px; align-items:center; cursor:pointer; }
+  form.chat { display:flex; gap:8px; padding:8px 12px; border-top:1px solid var(--line); }
+  form.chat input { flex:1; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:4px; padding:6px 8px; font: inherit; }
+  form.chat button { background:var(--acc); color:#111; border:0; border-radius:4px; padding:6px 12px; font-weight:600; cursor:pointer; }
+  img#shot { width:100%; display:block; background:#000; }
+  .muted { color:var(--dim); }
+  a { color:var(--tool); }
+  .status-ok { color:var(--ok); } .status-failed, .status-cancelled, .status-preempted, .status-timeout { color:var(--bad); } .status-running { color:var(--acc); }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Golem</h1>
+  <div class="state" id="state">connecting…</div>
+  <span class="muted" id="usage"></span>
+  <button id="met" title="Stop everything">met</button>
+</header>
+<main>
+  <section>
+    <h2>Transcript <small class="muted" id="conn">…</small></h2>
+    <div id="log"></div>
+    <form class="chat" id="chat"><input id="text" placeholder="say something to the agent as its owner… (goal …, met, mode x off are fast paths)" autocomplete="off"><button>send</button></form>
+  </section>
+  <aside>
+    <section><h2>Picture <small><a href="#" id="fresh">take a new one</a></small></h2><img id="shot" alt="no screenshot yet"></section>
+    <section><h2>Runs</h2><div class="list" id="runs">…</div></section>
+    <section><h2>Reflexes</h2><div class="list" id="reflexes">…</div></section>
+    <section><h2>Inbox <small class="muted" id="inboxn"></small></h2><div class="list" id="inbox"></div></section>
+  </aside>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const agent = q.get("agent") || location.pathname.split("/")[2] || "";
+const token = q.get("token") || localStorage.getItem("golem.token." + agent) || "";
+if (q.get("token")) localStorage.setItem("golem.token." + agent, q.get("token"));
+const base = `/agents/${encodeURIComponent(agent)}`;
+const H = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+document.getElementById("title").textContent = `Golem · ${agent}`;
+const log = document.getElementById("log");
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const ts = (t) => new Date(t).toTimeString().slice(0, 8);
+let agentBuf = null;
+function add(cls, html, t = Date.now()) {
+  const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 40;
+  const d = document.createElement("div");
+  d.className = "ev " + cls;
+  d.innerHTML = `<span class="t">${ts(t)}</span>${html}`;
+  log.appendChild(d);
+  while (log.children.length > 600) log.removeChild(log.firstChild);
+  if (stick) log.scrollTop = log.scrollHeight;
+  return d;
+}
+function flushAgent() { agentBuf = null; }
+function onEvent(type, d) {
+  switch (type) {
+    case "prompt": flushAgent(); add("prompt", `<details><summary>prompt (${esc(d.text.split("\n")[0].slice(0, 120))})</summary>${esc(d.text)}</details>`, d.t); break;
+    case "agent_text": {
+      if (!agentBuf) { agentBuf = add("agent", "", d.t); agentBuf.dataset.text = ""; }
+      agentBuf.dataset.text += d.text;
+      agentBuf.innerHTML = `<span class="t">${ts(d.t)}</span>${esc(agentBuf.dataset.text)}`;
+      break;
+    }
+    case "golem_tool": flushAgent(); add("tool" + (d.isError ? " err" : ""), `<details><summary>${esc(d.name)}(${esc(JSON.stringify(d.args)).slice(0, 160)}) → ${esc(String(d.result).split("\n")[0].slice(0, 140))} <span class="muted">${d.ms}ms</span></summary>${esc(d.result)}</details>`, d.t); break;
+    case "turn_end": flushAgent(); add("turn", `turn ${esc(d.stopReason)} · ${(d.ms / 1000).toFixed(1)}s${d.tokens ? ` · ${d.tokens} tokens` : ""}${d.model ? ` · ${esc(d.model)}` : ""}`, d.t); break;
+    case "inbox": { const it = d.item || {}; add("inbox", `inbox ${esc(it.kind)}${it.from ? " " + esc(it.from) : ""}: ${esc(it.text)}`, d.t); refreshInbox(); break; }
+    case "usage": document.getElementById("usage").textContent = `context ${Math.round(d.used / 1000)}k / ${Math.round(d.size / 1000)}k`; break;
+    case "hello": setState(d.state); break;
+    case "reflex": add("sys", `reflex ${esc(d.name)}: ${esc(d.note)}`, d.t); break;
+    default: break;
+  }
+}
+function setState(s) { document.getElementById("state").textContent = s.replace(/^\[state\]\s*/, ""); }
+async function get(path) { const r = await fetch(base + path, { headers: H }); if (!r.ok) throw new Error(`${path}: ${r.status}`); return r; }
+async function post(path, body) { const r = await fetch(base + path, { method: "POST", headers: H, body: JSON.stringify(body || {}) }); return r.json().catch(() => ({})); }
+async function refreshStatus() { try { setState(await (await get("/status")).text()); } catch (e) { setState("offline: " + e.message); } }
+async function refreshRuns() {
+  try {
+    const rs = await (await get("/runs")).json();
+    document.getElementById("runs").innerHTML = rs.length ? rs.map((r) => `<div><span class="status-${r.status}">${esc(r.status)}</span> ${esc(r.id)} ${esc(r.label)} p${r.priority}${r.background ? " bg" : ""}${r.current ? ` <span class="muted">in ${esc(r.current)}</span>` : ""}</div>`).join("") : "<span class=muted>no runs</span>";
+  } catch {}
+}
+async function refreshReflexes() {
+  try {
+    const rs = await (await get("/reflexes")).json();
+    document.getElementById("reflexes").innerHTML = rs.map((r) => `<div><label><input type="checkbox" data-name="${esc(r.name)}" ${r.on ? "checked" : ""}> ${esc(r.name)} <span class="muted">p${r.priority}${r.active ? " · acting" : ""}</span></label></div>`).join("");
+    document.querySelectorAll("#reflexes input").forEach((el) => el.onchange = () => post("/reflexes", { name: el.dataset.name, on: el.checked }));
+  } catch {}
+}
+async function refreshInbox() {
+  try {
+    const it = await (await get("/inbox")).json();
+    document.getElementById("inboxn").textContent = it.length ? `${it.length} unread` : "";
+    document.getElementById("inbox").innerHTML = it.length ? it.map((i) => `<div>${esc(i.kind)} p${i.priority}${i.from ? " " + esc(i.from) : ""}: ${esc(i.text)}</div>`).join("") : "<span class=muted>empty</span>";
+  } catch {}
+}
+function refreshShot(fresh) { document.getElementById("shot").src = `${base}/shot?token=${encodeURIComponent(token)}${fresh ? "&fresh=1" : ""}&t=${Date.now()}`; }
+document.getElementById("fresh").onclick = (e) => { e.preventDefault(); refreshShot(true); };
+document.getElementById("met").onclick = () => post("/met");
+document.getElementById("chat").onsubmit = async (e) => {
+  e.preventDefault();
+  const el = document.getElementById("text"); const text = el.value.trim(); if (!text) return;
+  el.value = "";
+  add("inbox", `you: ${esc(text)}`);
+  await post("/inbox", { text, kind: "chat" });
+};
+async function loadTranscript() {
+  try {
+    const lines = await (await get("/transcript?limit=150")).json();
+    for (const l of lines) {
+      if (l.role === "user") onEvent("prompt", { text: l.text, t: l.t });
+      else if (l.role === "agent") { add("agent", esc(l.text), l.t); }
+      else if (l.role === "tool") { const m = /^([a-z_]+)\((.*?)\) -> ([\s\S]*)$/.exec(l.text); if (m) onEvent("golem_tool", { name: m[1], args: safeJson(m[2]), result: m[3], ms: l.ms || 0, isError: l.isError, t: l.t }); else add("tool", esc(l.text), l.t); }
+      else add("sys", esc(l.text), l.t);
+    }
+    add("sys", "— live —");
+  } catch (e) { add("sys", "transcript: " + esc(e.message)); }
+}
+function safeJson(s) { try { return JSON.parse(s); } catch { return s; } }
+function connect() {
+  const es = new EventSource(`${base}/events?token=${encodeURIComponent(token)}`);
+  document.getElementById("conn").textContent = "connecting";
+  es.onopen = () => { document.getElementById("conn").textContent = "live"; };
+  es.onerror = () => { document.getElementById("conn").textContent = "reconnecting…"; };
+  for (const type of ["hello", "prompt", "agent_text", "golem_tool", "turn_end", "inbox", "usage", "reflex", "tool_call"]) {
+    es.addEventListener(type, (e) => { try { onEvent(type, JSON.parse(e.data)); } catch {} });
+  }
+}
+(async () => {
+  if (!agent) { document.body.innerHTML = "<p style='padding:2em'>Open /agents/&lt;name&gt;/dash?token=… (token in data/&lt;name&gt;/tokens.json, key mcp).</p>"; return; }
+  await loadTranscript();
+  connect();
+  refreshStatus(); refreshRuns(); refreshReflexes(); refreshInbox(); refreshShot(false);
+  setInterval(refreshStatus, 2000); setInterval(refreshRuns, 3000); setInterval(refreshReflexes, 5000);
+})();
+</script>
+</body>
+</html>

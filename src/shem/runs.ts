@@ -38,6 +38,8 @@ export interface Run {
   promise: Promise<Value>;
   tracePath: string;
   tail: string[];         // last N trace lines
+  logs: string[];         // the script's own `log` lines
+  calls: number;          // blocking primitive calls made
 }
 
 export class RunManager {
@@ -79,9 +81,10 @@ export class RunManager {
       try { appendFileSync(tracePath, stamped + "\n"); } catch { /* trace is best-effort */ }
     };
     const timeoutMs = Math.min(opts.timeoutMs ?? 600_000, 3_600_000);
+    const logs: string[] = [];
     const ctx: RunCtx = {
       id, token,
-      log: (l) => write(`log ${l}`),
+      log: (l) => { logs.push(l); if (logs.length > 200) logs.shift(); write(`log ${l}`); },
       trace: (what, detail, ms) => { run.current = what; write(`${what} ${detail}${ms !== undefined ? ` (${ms}ms)` : ""}`); },
       budget: { deadline: t0 + timeoutMs, calls: 0, maxCalls: opts.maxCalls ?? 2000, loops: 0, maxLoops: opts.maxLoops ?? 100_000, depth: 0, maxDepth: 64 },
       tasks: new Set(), handlerError: null,
@@ -89,14 +92,14 @@ export class RunManager {
     write(`start ${script}(${Object.entries(params).map(([k, v]) => `${k}: ${show(v)}`).join(", ")}) p${priority}${background ? " background" : ""}`);
     const run: Run = {
       id, label: opts.label ?? script, script, params, priority, background,
-      status: "running", startedAt: t0, endedAt: null, result: null, error: null, current: "", token, tracePath, tail,
+      status: "running", startedAt: t0, endedAt: null, result: null, error: null, current: "", token, tracePath, tail, logs, calls: 0,
       promise: Promise.resolve(null),
     };
     run.promise = this.interpreter.run(program, script, params, ctx).then(
-      (v) => { run.status = "done"; run.result = v; run.endedAt = Date.now(); write(`done -> ${show(v)}`); this.emit("run_done", run); return v; },
+      (v) => { run.status = "done"; run.result = v; run.endedAt = Date.now(); run.calls = ctx.budget.calls; write(`done -> ${show(v)}`); this.emit("run_done", run); return v; },
       (e) => {
         const err = e instanceof GolemError ? e : new GolemError("failed", String((e as Error)?.message ?? e));
-        run.error = err; run.endedAt = Date.now();
+        run.error = err; run.endedAt = Date.now(); run.calls = ctx.budget.calls;
         if (run.status === "running") run.status = err.kind === "cancelled" ? "cancelled" : err.kind === "preempted" ? "preempted" : err.kind === "timeout" && Date.now() >= ctx.budget.deadline ? "timeout" : "failed";
         if (token.cancelled && token.reason.startsWith("preempted")) run.status = "preempted";
         write(`${run.status} !! ${err.kind}: ${err.message}`);
@@ -123,9 +126,19 @@ export class RunManager {
   }
 }
 
-export function describeRun(r: Run, tailLines = 12): string {
+/**
+ * Text for the mind. Compact by default: a successful run is its result plus what the script
+ * chose to `log`; only failures and still-running runs carry the trace tail, because that is where
+ * the diagnosis lives. `full` gives the tail regardless (shem_status, the shell).
+ */
+export function describeRun(r: Run, tailLines = 12, full = false): string {
   const dur = ((r.endedAt ?? Date.now()) - r.startedAt) / 1000;
-  const head = `${r.id} ${r.script} p${r.priority}${r.background ? " bg" : ""}: ${r.status} (${dur.toFixed(1)}s)${r.status === "running" && r.current ? `, in ${r.current}` : ""}`;
+  const calls = r.status === "running" ? "" : `, ${r.calls} calls`;
+  const head = `${r.id} ${r.script} p${r.priority}${r.background ? " bg" : ""}: ${r.status} (${dur.toFixed(1)}s${calls})${r.status === "running" && r.current ? `, in ${r.current}` : ""}`;
+  if (r.status === "done" && !full) {
+    const logs = r.logs.length ? `\nlog:\n${r.logs.slice(-20).join("\n")}` : "";
+    return `${head}\nresult: ${show(r.result)}${logs}`;
+  }
   const res = r.status === "done" ? `\nresult: ${show(r.result)}` : r.error ? `\nerror: ${r.error.kind}: ${r.error.message}` : "";
   const tail = r.tail.slice(-tailLines).join("\n");
   return `${head}${res}\ntrace:\n${tail}`;
