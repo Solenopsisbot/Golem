@@ -79,11 +79,15 @@ export class EvalRunner {
     const agent = resolveAgent(loaded, agentName);
     const t0 = Date.now();
     const said: string[] = [];
-    let deaths = 0, turns = 0, toolCalls = 0, tokens = 0;
+    let deaths = 0, turns = 0, toolCalls = 0, tokens = 0, lastContext = 0;
     const session = await AgentSession.start(agent, host, { waitForBodyMs: 900_000, orient: false, freshMind: task.fresh_session && (this.opts.fresh ?? true) });
-    const off = host.mcpUrl(agentName) ? session.subscribeEvents((ev) => {
-      if (ev.type === "turn_end") { turns++; tokens += Number(ev.tokens ?? 0); toolCalls += Number(ev.toolCalls ?? 0); }
-    }) : () => {};
+    // Count as things happen: the final turn is usually still running when the predicate passes.
+    const off = session.subscribeEvents((ev) => {
+      if (ev.type === "prompt" && !ev.queued) turns++;
+      else if (ev.type === "golem_tool") toolCalls++;
+      else if (ev.type === "turn_end") tokens += Number(ev.tokens ?? 0);
+      else if (ev.type === "usage") lastContext = Number(ev.used ?? 0);
+    });
     session.rt.body.on("chat", (d: { text: string; sender?: string }) => { if (d.sender === agent.body.username) said.push(d.text); });
     session.rt.body.on("death", () => { deaths++; });
     let status: TaskResult["status"] = "timeout";
@@ -109,7 +113,7 @@ export class EvalRunner {
       await session.stop().catch(() => {});
     }
     const result: TaskResult = {
-      name: task.name, path: "", status, seconds: (Date.now() - t0) / 1000, turns, toolCalls, tokens, deaths, detail,
+      name: task.name, path: "", status, seconds: (Date.now() - t0) / 1000, turns, toolCalls, tokens: tokens || lastContext, deaths, detail,
       startedAt: t0, endedAt: Date.now(), model: { plan: agent.mind.models.plan.model, act: agent.mind.models.act.model },
     };
     this.record(result);
