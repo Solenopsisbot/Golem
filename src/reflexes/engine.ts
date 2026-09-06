@@ -42,7 +42,7 @@ export class ReflexEngine {
   private readonly lastFired = new Map<string, number>();
   private readonly failures = new Map<string, number>();
   private timer: ReturnType<typeof setInterval> | undefined;
-  private acting: { name: string; token: CancelToken } | null = null;
+  private acting: { name: string; token: CancelToken; priority: number } | null = null;
   private readonly opts: ReflexEngineOptions;
   private readonly ctx: Ctx;
   private readonly log: Logger;
@@ -80,12 +80,14 @@ export class ReflexEngine {
   }
 
   private async tick(): Promise<void> {
-    if (this.acting) return;
     const m = this.ctx.mirror;
     if (!m.inWorld || !this.ctx.body.open) return;
     const now = Date.now();
     const ordered = [...this.reflexes.values()].filter((r) => this.enabled.has(r.name)).sort((a, b) => b.priority - a.priority);
     for (const r of ordered) {
+      // While something is acting, only strictly higher-priority reflexes are considered; if one
+      // triggers it cancels the running action (a bunker beats walking to a dropped item).
+      if (this.acting && r.priority <= this.acting.priority) return;
       if (r.idleOnly && this.ctx.activity.busy) continue;
       // Cooldown doubles after each consecutive failure (max ~4 min), so a reflex that can't act
       // (no food, no bed) doesn't hammer the body every few seconds.
@@ -95,10 +97,15 @@ export class ReflexEngine {
       let trigger: unknown;
       try { trigger = await r.check(this.ctx); } catch (e) { this.log.debug(`${r.name}.check threw: ${(e as Error).message}`); continue; }
       if (!trigger) continue;
-      if (this.acting) return; // another tick got there first
+      if (this.acting) {
+        if (r.priority <= this.acting.priority) return; // another tick got there first
+        this.log.info(`reflex ${r.name} (p${r.priority}) overrides ${this.acting.name} (p${this.acting.priority})`);
+        this.acting.token.cancel(`overridden by reflex ${r.name}`);
+      }
       this.lastFired.set(r.name, now);
       const token = new CancelToken();
-      this.acting = { name: r.name, token };
+      const mine = { name: r.name, token, priority: r.priority };
+      this.acting = mine;
       if (r.interrupts) this.opts.preempt(`reflex ${r.name}`);
       const p = makePrimitives(withToken(this.ctx, token));
       this.ctx.trace.mark("reflex", { name: r.name, phase: "start", trigger });
@@ -118,7 +125,7 @@ export class ReflexEngine {
           if (n === 3) this.opts.onFire?.({ name: r.name, note: `keeps failing: ${msg}`, at: Date.now(), trigger });
           this.ctx.trace.mark("reflex", { name: r.name, phase: "error", error: msg });
         } finally {
-          this.acting = null;
+          if (this.acting === mine) this.acting = null;   // an override may already own the slot
         }
       })();
       return;
