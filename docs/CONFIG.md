@@ -96,3 +96,7 @@ reflexes.on = ["self_preservation", "unstuck", "self_defense", "hunting", "auto_
 - The CLI reads the same file: `golem up`, `golem up Kiko`, `golem attach Kiko`, `golem shell Kiko` (a Shem REPL against a live body, no mind involved), `golem met all`, `golem eval tasks/basic/*.json`, `golem replay data/Kiko/trace.jsonl --from 12:03`.
 
 `mind.permission_mode` is matched against whatever modes the agent advertises (substring, case-insensitive). Claude Code: `bypass`. Codex: `full-access` (its no-prompt mode; the others are `read-only` and `auto`). If nothing matches, Golem logs the available modes and leaves the agent's default.
+
+## Running a different mind (Codex)
+
+`golem.codex.toml` is a template for OpenAI Codex as the mind, via Zed's ACP adapter (`@zed-industries/codex-acp`). It sets `mind.command`/`args` to the adapter, `permission_mode = "full-access"`, and `mind.models` to the model and reasoning effort. Point `mind.env.CODEX_HOME` at an isolated dir (with its own `config.toml` and a symlinked `auth.json`) to keep your global Codex model default and skills out of the fleet. Tested on gpt-5.5 at low effort; gpt-6-astra needs a Codex ACP adapter newer than 0.16.0.
