@@ -20,7 +20,7 @@ moving the bodies elsewhere later.
   Gradle provisions its own JDK 21 for building MezzoSopranoClef, but running the jar needs one on your `PATH` or in `clef.java`.
 - **Claude Code**, installed and logged in: `npm install -g @anthropic-ai/claude-code`, then run `claude` once and sign in.
   Golem talks to it through the ACP adapter (`@agentclientprotocol/claude-agent-acp`), which `npx` fetches on first use; no separate install.
-- About 4 GB of RAM free per body (a 1 GB heap plus the JVM), and 2 GB for the dev server.
+- About 2 GB of RAM free per body (a 1 GB heap plus the JVM's own use), and 2 GB for the dev server.
 
 ## 2. The body: MezzoSopranoClef
 
@@ -86,7 +86,7 @@ Join from your own Minecraft client at `127.0.0.1:25566` to watch.
 
 ```bash
 bin/golem body Clay      # optional: just the body. First run downloads the client (minutes). Wait for "in world".
-bin/golem shell Clay     # drive it by hand: status, look, goto 100 64 100, mine oak_log. `help` lists commands.
+bin/golem shell Clay     # drive it by hand: status; look; goto 100 64 100. `help` lists commands.
 bin/golem met Clay       # stop everything it's doing
 bin/golem up Clay        # body + mind + MCP + dashboard; Ctrl-C stops all of it
 ```
