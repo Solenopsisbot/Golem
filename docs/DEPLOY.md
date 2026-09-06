@@ -17,8 +17,8 @@ Arch Linux, 16 threads, 32 GB. No passwordless sudo, so everything lives in the 
 | logs | `~/golem-bodies/<Agent>/logs/clef.log` |
 | services (`systemctl --user`, lingering enabled so they outlive logout) | `~/.config/systemd/user/golem-body-<Agent>.service` |
 
-The body config points at the dev server on the laptop's LAN address (`192.168.0.74:25566`) and
-binds its control port on `0.0.0.0` (9731 Clay, 9732 Flint) with the same `clef` token Golem keeps in
+The body config points at the dev server on the laptop's LAN address (`100.115.188.87:25566 (ladybug over Tailscale)`) and
+binds its control port on `0.0.0.0` (9731 Clay, 9732 Flint; reachable over Tailscale only, the LAN side is firewalled) with the same `clef` token Golem keeps in
 `data/<Agent>/tokens.json`, so `golem.toml` only needs `body.attach = "192.168.0.174:<port>"` under
 the agent. Remove that line to run the body locally again.
 
