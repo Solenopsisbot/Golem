@@ -5,9 +5,9 @@ The body stays alive on its own; the mind decides what to do with the life.
 
 ## What it does
 
-- Connects any [ACP](https://agentclientprotocol.com)-speaking agent (Claude Code,
-  Codex, Gemini CLI, etc.) to a headless Minecraft client as a character with a
-  persona, a memory, and goals.
+- Connects an [ACP](https://agentclientprotocol.com)-speaking coding agent to a
+  headless Minecraft client as a character with a persona, a memory, and goals.
+  Claude Code is what's tested; anything that speaks ACP should work.
 - Keeps the character alive without the model: reflexes (eat, flee, fight, respawn)
   run deterministically at 250 ms with no API calls.
 - Gives the mind **Shem**, a small scripting language over Minecraft primitives so
@@ -39,26 +39,28 @@ you get *met* ("dead"), and it stops.
 ```
 
 **Body.** A typed TypeScript wrapper over the WebSocket API of
-[MezzoSopranoClef](https://github.com/nicholasgasior/MezzoSopranoClef), a headless
+[MezzoSopranoClef](https://github.com/Solenopsisbot/MezzoSopranoClef), a headless
 Minecraft client built on the real Fabric client with Baritone. One JVM per
-character, no GPU required. Golem maintains a state mirror (position, health,
-inventory, nearby entities) so primitives read local state instead of round-tripping.
+character, no GPU required. Golem maintains a state mirror (position, health, food,
+held item, open screen, day phase) from the body's status stream, so the common checks
+read local state instead of round-tripping.
 
 **Primitives.** Promise-returning operations with world-observable completion:
 `goto` resolves when you arrive, `mine` resolves when the block is air, `place`
 verifies the block appeared. These are the same ops whether called from a one-shot
 MCP tool or from inside a Shem script.
 
-**Reflexes.** Self-preservation, auto-eat, auto-respawn, cowardice, self-defense,
-hunting, item collecting, unstuck, idle staring. Written in Shem, loaded at boot,
-toggled by the mind or by an owner in chat. A reflex firing preempts lower-priority
-work and posts a note to the mind's inbox.
+**Reflexes.** Auto-respawn, bunker (dig in and cap the hole when hurt with hostiles
+close), self-preservation, self-defense, cowardice, auto-eat, unstuck, item collecting,
+idle staring. The built-ins are TypeScript; more can be written in Shem under
+`shem/reflexes/`. Toggled by the mind or by an owner in chat. A higher-priority reflex
+preempts one that's acting, and every firing posts a note to the mind's inbox.
 
 **Drive.** The nervous system. World events become inbox items with priorities.
 While the mind is mid-turn, items accumulate and are delivered as one coalesced
-prompt when the turn ends. Events above the interrupt threshold (death, critical
-damage, an owner speaking) cancel the current turn immediately. With no goal set
-and an empty inbox, the mind sleeps and costs nothing.
+prompt when the turn ends. An owner's message or another golem's dm is folded into
+the running turn without cancelling it; death and critical damage cancel it. With no
+goal set and an empty inbox, the mind sleeps and makes no API calls.
 
 **Mind.** An ACP client. Spawns the configured agent as a subprocess with a
 workspace directory and a Golem MCP server attached. The agent brings its own file
@@ -76,9 +78,9 @@ See [docs/SHEM.md](docs/SHEM.md) for the full spec and grammar.
 ## Requirements
 
 - **Node.js 24+** (uses native type stripping; no build step)
-- **Java 21** for the body (each body is a JVM process, ~768 MB heap)
+- **Java 21** for the body (each body is a JVM process, about 1 GB of heap)
 - **MezzoSopranoClef launcher jar.** The body is a headless Minecraft client from
-  the [MezzoSopranoClef](https://github.com/nicholasgasior/MezzoSopranoClef) project.
+  the [MezzoSopranoClef](https://github.com/Solenopsisbot/MezzoSopranoClef) project (same author, separate repo).
   Build it there with `./gradlew :launcher:jar` (the output lands in
   `launcher/build/libs/`), then point `clef.launcher` in `golem.toml` at the jar.
   Golem stages a copy under `data/clef/` on first run.
@@ -91,8 +93,7 @@ See [docs/SHEM.md](docs/SHEM.md) for the full spec and grammar.
 
 ```bash
 # Install dependencies
-npm install
-npm run gen:body          # generate typed body client from MezzoSopranoClef's schema
+npm install               # the typed body client is committed; `npm run gen:body` regenerates it from the Clef schema
 
 # Start a dev Minecraft server (offline mode, survival, peaceful)
 scripts/dev-server.sh --bg
@@ -137,8 +138,9 @@ prompt. The levers, in order of effect:
    threshold (default 100k tokens). A 1M-context model runs turns at roughly
    50--80k and never enters the long-context price tier.
 2. **Fewer calls.** The orientation asks the mind to batch actions into Shem
-   snippets and write reusable scripts. In field testing, 28 `shem_eval` calls
-   carried 90% of the tool time.
+   snippets and write reusable scripts, and every run's result ends with an
+   observation line (position, inventory delta, hostiles) so acting and looking
+   are one call. The prompt header carries inventory and nearby hostiles too.
 3. **Model routing.** Planning turns use the strong model; routine survival uses
    a cheaper one. Configured per-agent in `golem.toml`.
 4. **Sleep.** With no goal and an empty inbox, the mind makes zero API calls.
@@ -155,8 +157,8 @@ forged, the base sealed before night, a corpse run after a drowning, four
 self-written scripts, zero tool errors. Seven eval tasks pass (wood, stone pickaxe,
 iron pickaxe, crafting table, smelting, sleep, script writing).
 
-Some things are stubbed or planned: `smelt` and `trade` in Shem, blueprints and
-`build`, session resume for non-Claude agents, cross-process fleet peering. See
+Some things are stubbed or planned: `dig_down`, `tunnel` and `trade` in Shem,
+blueprints and `build`, cross-process fleet peering. See
 [docs/ROADMAP.md](docs/ROADMAP.md) for the full milestone list.
 
 ## Docs
@@ -170,6 +172,9 @@ Some things are stubbed or planned: `smelt` and `trade` in Shem, blueprints and
 | [DEV.md](docs/DEV.md) | Development setup, shell commands, evals, dashboard, watching a mind |
 | [DEPLOY.md](docs/DEPLOY.md) | Running bodies on a remote machine |
 | [ROADMAP.md](docs/ROADMAP.md) | Milestones and what's done |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Checks, conventions, what belongs in a tool vs. a script |
+
+License: MIT.
 
 ---
 
