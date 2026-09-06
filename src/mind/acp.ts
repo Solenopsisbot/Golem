@@ -2,7 +2,7 @@
 // default) driven as a long-lived session. Golem is the ACP client: it answers permission requests
 // by policy, serves file reads/writes inside a workspace jail, and runs prompt turns one at a time.
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync, openSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
@@ -31,6 +31,8 @@ export interface MindOptions {
 
 export interface TurnResult { stopReason: StopReason; text: string; usage?: Usage | null }
 
+interface SavedSession { sessionId: string; command: string; args: string[]; savedAt: number }
+
 const PERMISSION_PREFERENCE: acp.PermissionOptionKind[] = ["allow_always", "allow_once", "reject_once", "reject_always"];
 
 export class Mind {
@@ -40,6 +42,8 @@ export class Mind {
   private session: acp.ActiveSession | undefined;
   private ctx: acp.ClientContext | undefined;
   caps: acp.AgentCapabilities = {};
+  /** True when start() resumed a previous session instead of opening a fresh one. */
+  resumed = false;
   private turn: Promise<TurnResult> | null = null;
   private stopping = false;
   private releaseConnection: (() => void) | undefined;
@@ -99,8 +103,8 @@ export class Mind {
           } else {
             this.log.warn("agent lacks http MCP support; no Golem tools will be available (stdio shim not implemented yet)");
           }
-          this.session = await ctx.buildSession({ cwd, mcpServers }).start();
-          this.log.info(`session ${this.session.sessionId} (images=${this.supportsImages}, loadSession=${!!this.caps.loadSession})`);
+          this.session = await this.resumeOrCreate(ctx, cwd, mcpServers);
+          this.log.info(`session ${this.session.sessionId}${this.resumed ? " (resumed)" : ""} (images=${this.supportsImages}, loadSession=${!!this.caps.loadSession})`);
           await this.applyMode();
           ready();
         } catch (e) {
@@ -111,6 +115,37 @@ export class Mind {
       .catch((e) => { this.log.error(`connection ended: ${(e as Error).message}`); failed(e); });
 
     await readyP;
+  }
+
+  private get sessionFile(): string { return resolve(this.opts.agent.dataDir, "session.json"); }
+
+  /**
+   * Reopen the previous session when the agent supports session/load and the saved id came from
+   * the same agent command; otherwise start a new one. The load's history replay arrives as
+   * session/update notifications before any ActiveSession is attached, so it is dropped: the agent
+   * has the history, we don't need a copy.
+   */
+  private async resumeOrCreate(ctx: acp.ClientContext, cwd: string, mcpServers: acp.McpServer[]): Promise<acp.ActiveSession> {
+    const { agent } = this.opts;
+    let saved: SavedSession | null = null;
+    if (existsSync(this.sessionFile)) { try { saved = JSON.parse(readFileSync(this.sessionFile, "utf8")); } catch { saved = null; } }
+    const sameAgent = saved && saved.command === agent.mind.command && JSON.stringify(saved.args) === JSON.stringify(agent.mind.args);
+    if (saved && sameAgent && this.caps.loadSession) {
+      try {
+        const resp = await ctx.request(acp.methods.agent.session.load, { sessionId: saved.sessionId, cwd, mcpServers });
+        const attach = (ctx as unknown as { attachSession(r: { sessionId: string; modes?: acp.SessionModeState | null }): acp.ActiveSession }).attachSession;
+        const session = attach.call(ctx, { sessionId: saved.sessionId, modes: resp?.modes ?? null });
+        this.resumed = true;
+        return session;
+      } catch (e) {
+        this.log.warn(`could not resume session ${saved.sessionId} (${(e as Error).message}); starting fresh`);
+      }
+    }
+    const session = await ctx.buildSession({ cwd, mcpServers }).start();
+    this.resumed = false;
+    const record: SavedSession = { sessionId: session.sessionId, command: agent.mind.command, args: agent.mind.args, savedAt: Date.now() };
+    try { writeFileSync(this.sessionFile, JSON.stringify(record, null, 2) + "\n"); } catch (e) { this.log.warn(`could not save session id: ${(e as Error).message}`); }
+    return session;
   }
 
   private async applyMode(): Promise<void> {

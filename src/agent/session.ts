@@ -72,7 +72,9 @@ export class AgentSession {
     });
     await s.mind.start();
     s.drive.start();
-    if (opts.orient ?? true) {
+    if (s.mind.resumed) {
+      s.drive.push({ kind: "system", priority: 30, text: "(Golem restarted; your session was resumed with its history. The world may have moved on: check status before acting on old assumptions.)" });
+    } else if (opts.orient ?? true) {
       const tail = s.journal.tail(20);
       s.drive.push({ kind: "system", priority: 50, text: `You just woke up in the world. Look around, say hello briefly if anyone is nearby, then wait for something to happen.${tail ? `\nRecent journal:\n${tail}` : ""}` });
     }
