@@ -30,7 +30,7 @@ fi
 ports=$(lsof -nP -iTCP -sTCP:LISTEN -t 2>/dev/null | while read -r pid; do ps -o command= -p "$pid" | grep -qE 'mezzoclef|launcher\.jar' && echo "$pid"; done || true)
 [[ -n $ports ]] && { echo "ERROR: a Clef process still holds a port: $ports"; exit 1; }
 
-: > data/up.log
+[[ -f data/up.log ]] && mv data/up.log data/up.prev.log   # keep the last run: the shutdown log is the evidence when a body survives
 GOLEM_LOG=${GOLEM_LOG:-info} nohup node src/cli/golem.ts up "$@" > data/up.log 2>&1 &
 echo $! > $PIDFILE
 echo "launched up (pid $(cat $PIDFILE)); waiting for the fleet"

@@ -112,12 +112,11 @@ async function main(): Promise<void> {
       const supervisors: Supervisor[] = [];
       const sessions: AgentSession[] = [];
       const shutdown = async () => {
-        log.info("stopping");
-        setTimeout(() => { log.warn("shutdown is taking too long; exiting"); process.exit(0); }, 15_000).unref();
-        // Sessions first (they close their body clients), then the bodies, or the clients reconnect forever.
-        await Promise.allSettled(sessions.map((s) => s.stop()));
-        await Promise.allSettled(supervisors.map((s) => s.stop()));   // whole process trees, ports verified free
-        for (const name of names) { const agent = resolveAgent(loaded, name); if (!agent.body.attach) killBody(agent); }
+        log.info("shutting down");
+        // Bodies first and in parallel with the minds: a mind can take ten seconds to wind down, and
+        // a body that outlives this process keeps its username logged in and kicks its replacement.
+        setTimeout(() => { log.warn("shutdown is taking too long; killing bodies and exiting"); for (const s of supervisors) s.killNow(); process.exit(0); }, 15_000).unref();
+        await Promise.allSettled([...supervisors.map((s) => s.stop()), ...sessions.map((s) => s.stop())]);
         await host.stop().catch(() => {});
         process.exit(0);
       };

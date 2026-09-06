@@ -142,7 +142,12 @@ export async function ensurePortFree(agent: AgentConfig): Promise<void> {
   if (portHolders(agent.body.port).length) throw new Error(`${agent.name}: port ${agent.body.port} still held after killing stale bodies`);
 }
 
-export interface Supervisor { stop(): Promise<void>; readonly child: ChildProcess | undefined }
+export interface Supervisor {
+  stop(): Promise<void>;
+  /** Synchronous SIGKILL of the whole tree, for a shutdown that has run out of time. */
+  killNow(): void;
+  readonly child: ChildProcess | undefined;
+}
 
 /**
  * Keep a body alive: relaunch it `restartDelayMs` after it exits for any reason we didn't ask for.
@@ -172,7 +177,14 @@ export function superviseBody(agent: AgentConfig, opts: { restartDelayMs?: numbe
   };
   void launch();
   return {
-    async stop() { stopped = true; if (child?.pid) await killTree(child.pid, agent.body.port); },
+    async stop() {
+      stopped = true;
+      if (!child?.pid) return;
+      log.info(`${agent.name}: stopping body tree ${processTree(child.pid).join(",")}`);
+      await killTree(child.pid, agent.body.port);
+      log.info(`${agent.name}: body stopped, port ${agent.body.port} ${portHolders(agent.body.port).length ? "STILL HELD" : "free"}`);
+    },
+    killNow() { stopped = true; if (child?.pid) for (const pid of processTree(child.pid)) { try { process.kill(pid, "SIGKILL"); } catch { /* gone */ } } },
     get child() { return child; },
   };
 }
