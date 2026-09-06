@@ -90,7 +90,7 @@ export const TOOLS: ToolDef[] = [
   def({ name: "attack", description: "Fight an entity by id until it's gone or the timeout passes (walks into reach, picks a weapon).", input: { entity_id: z.number().int(), timeout_s: z.number().min(3).max(120).default(30) },
     async run(a, { p }) { const r = await p.attack(a.entity_id, { timeoutMs: a.timeout_s * 1000 }); return ok(`${r.killed ? "killed" : "stopped"} after ${r.hits} hits`); } }),
   def({ name: "equip", description: "Equip armor, a shield, or move a tool to hand.", input: { item: z.string() },
-    async run(a, { p }) { await p.equip(a.item); return ok(`equipped ${a.item}`); } }),
+    async run(a, { p }) { const r = await p.equip(a.item); return ok(r.slot === null ? `wearing ${a.item}` : `holding ${r.held.replace("minecraft:", "")} (hotbar ${r.slot})`); } }),
   def({ name: "eat", description: "Eat a named food, or the best food you carry.", input: { item: z.string().optional() },
     async run(a, { p }) { const r = await p.eat(a.item); return ok(r.ate ? `ate ${r.ate}, food now ${r.food}` : "not hungry"); } }),
   def({ name: "drop", description: "Drop items (count omitted = whole stacks).", input: { item: z.string(), count: z.number().int().min(1).optional() },

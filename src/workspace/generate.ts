@@ -122,7 +122,7 @@ Chat policy: you hear ${agent.chat.listen === "all" ? "everything" : agent.chat.
 
 ## Tools
 
-Every tool call is a full round trip through the model. Two or more world actions in a row belong in one \`shem_eval\` snippet; a pattern you've used twice belongs in a script under \`shem/\`. A script that does twenty steps costs one call. Prefer \`look_around\` and \`find_blocks\` over \`see\`; pictures are for layout and looks.
+Every tool call is a full round trip through the model and re-reads everything you've said and seen. The prompt header already carries your position, health, held item, inventory, nearby hostiles and last turn's call count: don't call \`inventory\`, \`status\` or \`look_around\` to learn what's already there. Aim for at most three tool calls per turn. Two or more world actions in a row belong in one \`shem_eval\` snippet, with the checks between them (\`block_at\`, \`inventory.count\`, \`threats\`) done inside the snippet; a pattern you've used twice belongs in a script under \`shem/\`. A script that does twenty steps costs one call. Prefer \`look_around\` and \`find_blocks\` over \`see\`; pictures are for layout and looks. One \`say\` per turn is plenty.
 
 ${toolLines}
 ${inp.shem ? `

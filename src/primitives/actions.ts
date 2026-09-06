@@ -175,9 +175,24 @@ export async function attack(ctx: Ctx, target: number | Entity, opts: AttackOpts
   });
 }
 
-export async function equip(ctx: Ctx, item: string): Promise<void> {
-  try { await ctx.body.call("equip", { item: fullId(item) }); }
-  catch (e) { throw fromClef(e, `equip ${item}`); }
+const WEARABLE = /_(helmet|chestplate|leggings|boots)$|^minecraft:(elytra|shield|carved_pumpkin|turtle_helmet)$/;
+
+/**
+ * Hold an item. Armour goes through the body's equip (it lands in the armour slots); anything else
+ * goes through selectItem, which puts it in the hotbar AND selects that slot, then we wait for the
+ * server to confirm what's in hand. The body's own equip only guarantees "in the hotbar", which had
+ * a mind re-equipping a hoe eleven times while the state header kept saying "held empty".
+ */
+export async function equip(ctx: Ctx, item: string): Promise<{ slot: number | null; held: string }> {
+  const id = fullId(item);
+  if (WEARABLE.test(id)) {
+    try { await ctx.body.call("equip", { item: id }); } catch (e) { throw fromClef(e, `equip ${item}`); }
+    return { slot: null, held: ctx.mirror.heldItem };
+  }
+  const slot = await selectItem(ctx, id);
+  await until(() => ctx.mirror.heldItem.replace(/\s+x\d+$/, "") === id, { timeoutMs: 1500, intervalMs: 100, what: `holding ${item}`, token: ctx.token })
+    .catch(() => { /* the status poll may lag a second; the slot is selected either way */ });
+  return { slot, held: ctx.mirror.heldItem };
 }
 
 /** Eat a named item, or the best food available. Resolves when hunger went up. */

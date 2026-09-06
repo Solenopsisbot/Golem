@@ -3,7 +3,7 @@
 import { appendFileSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-export type TranscriptRole = "user" | "agent" | "thought" | "tool" | "system";
+export type TranscriptRole = "user" | "agent" | "thought" | "tool" | "system" | "event";
 
 export class Transcript {
   private readonly path: string;

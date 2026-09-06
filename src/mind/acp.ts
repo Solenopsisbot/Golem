@@ -78,7 +78,7 @@ export class Mind {
     const errLog = openSync(resolve(agent.dataDir, "mind.log"), "a");
     const child = spawn(agent.mind.command, agent.mind.args, {
       cwd,
-      env: { ...process.env, ...agent.mind.env },
+      env: { ...process.env, ...(agent.mind.compact_window > 0 ? { CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(agent.mind.compact_window) } : {}), ...agent.mind.env },
       stdio: ["pipe", "pipe", errLog],
     });
     this.child = child;

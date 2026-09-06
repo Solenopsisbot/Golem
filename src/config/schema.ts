@@ -38,6 +38,13 @@ export const MindSection = z.object({
   env: z.record(z.string(), z.string()).default({}),
   permission_mode: z.string().default("bypass"),
   allow_shell: z.boolean().default(true),
+  /**
+   * Context size (tokens) at which the harness's own auto-compaction runs. Claude Code compacts
+   * near this window instead of near the model's real one, so a 1M-context model still runs turns
+   * at ~100k of context: cheaper per call, no long-context pricing tier, and compaction is the
+   * summarisation the model was trained with. 0 = leave the harness default.
+   */
+  compact_window: z.number().int().default(150_000),
   model: z.string().default(""),
   effort: z.string().default(""),
   /** Two-tier model routing: `plan` turns (owner asks, deaths, goal changes, failures, every Nth turn, or when the agent calls plan_next) vs `act` turns (everything else). */

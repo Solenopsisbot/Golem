@@ -55,6 +55,10 @@ export class Drive {
   private emptyGoalTurns = 0;
   private lastTurnWasGoalTick = false;
   private readonly deathTimes: number[] = [];
+  private lastContextUsed = 0;
+  compactions = 0;
+  /** Tool calls in the previous turn, shown in the state header as a nudge toward batching. */
+  private lastTurnToolCalls = -1;
   private deathLoopUntil = 0;   // while set, deaths/damage don't wake the mind; reflexes carry on
 
   constructor(opts: DriveOptions) {
@@ -123,7 +127,26 @@ export class Drive {
   async mindCancel(): Promise<void> { await this.mind.cancel(); }
 
   /** The `[state]` line at the top of every prompt (and the status tool). */
-  stateHeader(): string {
+  /** Inventory and nearby-hostile summaries for the prompt header: one body round trip each, bounded. */
+  private async gatherExtras(): Promise<{ inv?: string; near?: string }> {
+    if (!this.rt.mirror.inWorld || this.rt.mirror.dead) return {};
+    const p = this.rt.p;
+    const withTimeout = <T,>(x: Promise<T>): Promise<T | undefined> => Promise.race([x.catch(() => undefined), new Promise<undefined>((r) => setTimeout(() => r(undefined), 800))]);
+    const [inv, threats] = await Promise.all([withTimeout(p.inventory()), withTimeout(p.threats(16))]);
+    const out: { inv?: string; near?: string } = {};
+    if (inv) {
+      const counts = new Map<string, number>();
+      for (const it of inv.items) { const id = it.item.replace("minecraft:", ""); counts.set(id, (counts.get(id) ?? 0) + it.count); }
+      const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([id, n]) => `${id} ${n}`);
+      out.inv = top.length ? `inv: ${top.join(", ")}${counts.size > 10 ? `, +${counts.size - 10} more` : ""}` : "inv: empty";
+    }
+    if (threats) {
+      out.near = threats.length ? `hostiles(16): ${threats.slice(0, 4).map((t) => `${t.type.replace("minecraft:", "")} ${Math.round(t.distance)}m`).join(", ")}${threats.length > 4 ? ` +${threats.length - 4}` : ""}` : "no hostiles within 16";
+    }
+    return out;
+  }
+
+  stateHeader(extras: { inv?: string; near?: string } = {}): string {
     const m = this.rt.mirror;
     const parts = [
       this.rt.agent.name,
@@ -138,7 +161,11 @@ export class Drive {
       this.rt.reflexes.active ? `reflex ${this.rt.reflexes.active} acting` : "",
       this.goal ? `goal: ${this.goal}` : "no goal",
     ].filter(Boolean);
-    return `[state] ${parts.join(" | ")}`;
+    const lines = [`[state] ${parts.join(" | ")}`];
+    if (extras.inv) lines.push(`[inv] ${extras.inv.replace(/^inv: /, "")}`);
+    if (extras.near) lines.push(`[near] ${extras.near}`);
+    if (this.lastTurnToolCalls >= 0) lines.push(`[last turn] ${this.lastTurnToolCalls} tool call${this.lastTurnToolCalls === 1 ? "" : "s"}${this.lastTurnToolCalls > 4 ? " (batch more into one shem_eval)" : ""}`);
+    return lines.join("\n");
   }
 
   // ---- wiring -----------------------------------------------------------------------
@@ -242,27 +269,29 @@ export class Drive {
     }
   }
 
-  private buildPrompt(items: InboxItem[]): acp.ContentBlock[] {
-    const blocks: acp.ContentBlock[] = [block.text(`${this.stateHeader()}\n${renderInbox(items)}`)];
+  private buildPrompt(items: InboxItem[], extras: { inv?: string; near?: string } = {}): acp.ContentBlock[] {
+    const blocks: acp.ContentBlock[] = [block.text(`${this.stateHeader(extras)}\n${renderInbox(items)}`)];
     if (this.mind.supportsImages) {
       for (const it of items) if (it.image) blocks.push(block.image(it.image.data, it.image.mimeType));
     }
     return blocks;
   }
 
-  /** Which model tier a turn deserves. Owners, deaths, goal changes, failures, the first turn, a
-   *  plan_next request, or plan_every turns since the last planning turn all get the planning model. */
+  /** Which model tier a turn deserves. Owners, goal changes, failures, the first turn, a plan_next
+   *  request, or plan_every turns since the last planning turn get the planning model. Deaths don't:
+   *  the reflexes and the death-loop guard handle the moment, and the act model can walk back for the drops. */
   private wantsPlanning(items: InboxItem[]): boolean {
     if (this.escalateNext) return true;
     const every = this.rt.agent.drive.plan_every;
     if (every > 0 && this.turnsSincePlan >= every) return true;
-    return items.some((i) => i.kind === "death" || i.kind === "run_failed" || i.priority >= this.rt.agent.drive.interrupt_priority
+    return items.some((i) => i.kind === "run_failed" || (i.kind !== "death" && i.priority >= this.rt.agent.drive.interrupt_priority)
       || (i.kind === "goal" && !!i.from) || (i.kind === "system" && /woke up|resumed/.test(i.text)));
   }
 
   private async runTurn(): Promise<void> {
     const items = this.inbox.drain();
-    const blocks = this.buildPrompt(items);
+    const extras = await this.gatherExtras().catch(() => ({}));
+    const blocks = this.buildPrompt(items, extras);
     const promptText = (blocks[0] as { text: string }).text;
     const planning = this.wantsPlanning(items);
     this.escalateNext = false;
@@ -284,7 +313,8 @@ export class Drive {
         this.tokenSpend.push({ t: Date.now(), n: billable });
       }
       const text = r.text.trim();
-      if (text) this.transcript.add("agent", text, { stopReason: r.stopReason });
+      this.transcript.add("agent", text, { stopReason: r.stopReason, model: this.mind.currentModel, planning, tokens: r.usage?.totalTokens ?? null, cached: r.usage?.cachedReadTokens ?? null, ms: Date.now() - this.turnStartedAt, toolCalls: this.turnToolCalls });
+      this.lastTurnToolCalls = this.turnToolCalls;
       this.emit({ type: "turn_end", stopReason: r.stopReason, text, ms: Date.now() - this.turnStartedAt, tokens: r.usage?.totalTokens ?? null, model: this.mind.currentModel, toolCalls: this.turnToolCalls });
       this.log.info(`turn ended: ${r.stopReason} after ${((Date.now() - this.turnStartedAt) / 1000).toFixed(1)}s, ${this.turnToolCalls} tool calls, ${this.mind.currentModel || "default model"}${planning ? " (planning)" : ""}${r.usage ? ` (${r.usage.totalTokens} tokens, ${r.usage.cachedReadTokens ?? 0} cached)` : ""}`);
       if (r.stopReason === "cancelled") this.push({ kind: "system", priority: 5, text: "(your previous turn was interrupted by what follows)" });
@@ -317,9 +347,18 @@ export class Drive {
       case "tool_call_update":
         if (u.status === "completed" || u.status === "failed") this.emit({ type: "tool_call_update", id: u.toolCallId, status: u.status });
         break;
-      case "usage_update":
-        this.emit({ type: "usage", used: u.used, size: u.size });
+      case "usage_update": {
+        const used = Number(u.used ?? 0), size = Number(u.size ?? 0);
+        // The adapter doesn't forward compact_boundary; a context that shrinks by a third is one.
+        if (this.lastContextUsed > 40_000 && used < this.lastContextUsed * 0.67) {
+          this.compactions++;
+          this.log.info(`context compacted: ${Math.round(this.lastContextUsed / 1000)}k -> ${Math.round(used / 1000)}k of ${Math.round(size / 1000)}k`);
+          this.transcript.add("event", `context compacted ${Math.round(this.lastContextUsed / 1000)}k -> ${Math.round(used / 1000)}k`, { compaction: true, from: this.lastContextUsed, to: used });
+        }
+        this.lastContextUsed = used;
+        this.emit({ type: "usage", used, size });
         break;
+      }
       default:
         break;
     }

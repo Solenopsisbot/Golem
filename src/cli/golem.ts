@@ -24,6 +24,7 @@ import { EvalRunner } from "../eval/runner.ts";
 import { loadTasks } from "../eval/task.ts";
 import { replay } from "./replay.ts";
 import { evalReport } from "../eval/report.ts";
+import { readTranscript, renderCost, summarise } from "./cost.ts";
 import { AgentBus } from "../comms/bus.ts";
 import { parseDuration } from "../config/schema.ts";
 import readline from "node:readline/promises";
@@ -139,6 +140,16 @@ async function main(): Promise<void> {
       log.info(`bridge: http://${host.host}:${host.port}/agents/<name>/{inbox,say,status,events} (bearer token in data/<name>/tokens.json)`);
       for (const s of sessions) log.info(`dashboard: http://${host.host}:${host.port}/agents/${encodeURIComponent(s.agent.name)}/dash?token=${ensureTokens(s.agent).mcp}`);
       await new Promise(() => {}); // run until signalled
+      return;
+    }
+    case "cost": {
+      // golem cost [agent...] [--hours N]  (default: every agent, last 1h)
+      const loaded = loadConfig(config);
+      const hi = rest.indexOf("--hours");
+      const hours = hi >= 0 ? Number(rest[hi + 1] ?? 1) : 1;
+      const names = rest.filter((a, i) => !a.startsWith("--") && i !== hi + 1);
+      const agents = (names.length ? names : agentNames(loaded)).map((n) => resolveAgent(loaded, n));
+      console.log(renderCost(agents.map((a) => summarise(a.name, readTranscript(resolve(a.dataDir, "transcript.jsonl")), hours))));
       return;
     }
     case "eval-report": {

@@ -109,3 +109,7 @@ The ACP adapter for Claude Code advertises `promptCapabilities.image = true`, so
 | Clay's body control plane | `127.0.0.1:9731` (`data/Clay/clef/`) |
 | Golem MCP / bridge HTTP / dashboard | `127.0.0.1:8770`; dashboard at `/agents/<name>/dash?token=…` |
 | MezzoSopranoClef's own e2e | `25565` and `8731`, untouched |
+
+## Context and cost
+
+A turn's cost is its context size times its tool calls: every call is an API round trip that re-reads everything. Three levers, in order of effect. (1) Native compaction: `mind.compact_window` sets Claude Code's auto-compact window (default 150k), so a 1M-context model runs turns at roughly 100k and never enters the long-context price tier; the drive logs each compaction it observes from the usage updates. (2) Fewer calls: the prompt header carries inventory, nearby hostiles and last turn's call count, the orientation asks for at most three calls per turn with checks done inside Shem snippets, and `equip` really puts the item in hand so the mind stops re-checking. (3) Routing: deaths no longer buy a planning turn. `golem cost` reports all of it per agent from the transcripts.
