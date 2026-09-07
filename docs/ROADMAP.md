@@ -99,8 +99,36 @@ Also worth naming: the rung's scaffolding drifted a long way (weakened mobs, an 
 fountain-side placement, most crystals pre-killed). That is fixture design turning into doing the
 agent's job for it, and it should be stripped back once the body can aim.
 
-Open: a Clef-side aiming/melee loop (written up as CLEF-CHANGES #19 `shootAt`/`meleeWhile`); then rung 6
-with the scaffolding removed.
+**Rung 6 passes. The ladder is complete: 6/6, the dragon is dead.** 1212 s, 19 turns, 31 deaths, with
+the scaffolding stripped — no pre-killed crystals, no teleport to the fountain, no pre-worn pumpkin, no
+force-enabled combat reflex, and a goal that states the objective and stops. Verified beyond the
+success predicate: the world contains a dragon egg at (0,66,0) and `level.dat` reads `DragonKilled=1`,
+both of which only the game writes, and both of which were explicitly cleared before the fight.
+
+What actually unblocked it, in order of size:
+
+- **Clef #19/#20 landed.** `shootAt`/`meleeWhile` run the aiming loop on the body at 20 Hz, and
+  `entities` now reports motion derived from displacement (`getVelocity()` reads zero for
+  server-driven mobs, so any lead computed from it aims at a standing target). Damage went from three
+  health in ten minutes to thirty-eight in two.
+- **The server was kicking the bot mid-fight.** "Flying is not enabled on this server": the dragon
+  throws you into the air, and the vanilla check reads that as cheating. The agent was sitting in a
+  disconnected screen correctly reporting it had nothing to act on. `allow-flight=true` now.
+- **A doc string was steering it wrong**, again. It wrote eleven `attack()` calls to three
+  `melee_while`, and `attack()` does nothing to a multi-part boss. Same shape as `stairs_down` saying
+  "never straight down" while `dig_down` sat unimplemented: the library index is what the mind reasons
+  from, so a doc that understates a limit costs a run.
+- **Rungs now start from the shipped library** (`fresh_workspace`), because a fresh mind with a
+  workspace full of its own previous attempts inherits last run's habits.
+
+Honest caveats: the End crystals were already absent from earlier world surgery, so this run did not
+have to clear them — a from-scratch fight starts with ten, and clearing them is a real part of the job.
+And 31 deaths is a war of attrition, not skill: it works because keepInventory and an in-dimension
+respawn make death cheap and dragon damage permanent.
+
+Open: crystal clearing inside the same run; and the reflex layer is still the weak link — the agent
+turned `self_preservation` off and left `dragon_fight` off, so the stalls were all periods where
+nothing useful ran between turns.
 
 ## Minds beyond Claude Code
 
