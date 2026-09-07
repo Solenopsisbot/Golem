@@ -19,14 +19,32 @@ reflex dragon_fight priority 93 on tick when dimension == "the_end" and nearest(
     // fight at height ends as fall damage, not as a dead dragon. goto walks, it does not jump off.
     try { goto(pos(0, 63, 0), reach: 6, timeout: 10s) } catch (e) { log "descend: ${e.kind}" }
   } else {
-    eat_if_hurt(12)
+    // Eat early. A dragon hit lands for about ten through diamond, so waiting until 12 means dying
+    // at full-ish health to a single swipe while the food is still going down.
+    eat_if_hurt(16)
+    // Dragon breath pools where it perches, and standing in it is the other way this fight is lost:
+    // it ticks for more than the food heals. Treat a cloud within five blocks as a reason to move.
+    let cloud = nearest("area_effect_cloud", 6)
+    let crystal = nearest("end_crystal", 120)
     let d = nearest("ender_dragon", 120)
-    if (d != none) {
+    if (cloud != none and health <= 16) {
+      back_off(cloud, 12)
+    } else if (crystal != none) {
+      // Crystals first, always. Every one still standing heals the dragon faster than a bow can hurt
+      // it, so shooting the dragon while any remain is throwing arrows away. They do not move, which
+      // makes them the easiest thing on the island to hit.
+      if (crystal.dist < 6) {
+        try { melee_while(crystal, max_ms: 2000) } catch (e) { log "crystal melee: ${e.kind}" }
+      } else {
+        try { shoot_at(crystal, shots: 3) } catch (e) { log "crystal: ${e.kind}" }
+      }
+    } else if (d != none) {
       // How far the dragon is from the fountain, horizontally. It perches on the fountain at
       // (0, 63, 0) and nowhere else, so this - not its distance from me - is what says "perched".
       let off = max(abs(d.pos.x), abs(d.pos.z))
-      if (health <= 6) {
+      if (health <= 11) {
         // Losing the trade. Break contact along the ground; dying costs the gear and the position.
+        // Eleven, not six: below that a single hit finishes the job before the retreat resolves.
         back_off(d, 18)
       } else if (d.pos.y < 71 and off < 12) {
         // It has come down to perch. That is the whole fight: a perched dragon holds still and takes
@@ -35,7 +53,7 @@ reflex dragon_fight priority 93 on tick when dimension == "the_end" and nearest(
         try { goto(pos(0, 63, 0), reach: 5, timeout: 6s) } catch (e) { log "close: ${e.kind}" }
         // The body swings on the real cooldown and resolves the dragon's parts; the parent entity
         // ignores damage, which is why hitting "the dragon" from a script can register nothing.
-        try { melee_while(d, max_ms: 5000, stop_below_health: 6) }
+        try { melee_while(d, max_ms: 5000, stop_below_health: 11) }
         catch (e) { if (e.kind == "unsupported") { try { attack(d, timeout: 6s) } catch (e2) { log "melee: ${e2.kind}" } } else { log "melee: ${e.kind}" } }
       } else if (inventory.count("arrow") > 0) {
         // Out of reach: lead it. Aiming where it already is puts arrows in the floor.
