@@ -1,0 +1,138 @@
+// Eyes of ender, getting down to a stronghold, and the End portal.
+
+/// Throw one eye and watch where it goes. Returns a vec: x and z are the horizontal direction it flew,
+/// y is how far it fell. All zero when the eye was lost (they shatter one time in five) or not seen.
+script throw_eye(): vec {
+  if (inventory.count("ender_eye") < 1) fail "no ender_eye"
+  equip("ender_eye")
+  use_item()
+  let first = none
+  let last = none
+  repeat (14) {
+    wait 200ms
+    let eyes = find_entities("eye_of_ender", radius: 48)
+    if (eyes.empty == false) {
+      let e = eyes.first
+      if (first == none) first = e.pos
+      last = e.pos
+    }
+  }
+  if (first == none) return vec(0, 0, 0)
+  return vec(last.x - first.x, last.y - first.y, last.z - first.z)
+}
+
+/// Throw eyes and walk the way they fly until one drops where you stand. Returns that spot.
+script follow_eyes(max_throws: int = 12, step: int = 160): pos {
+  let throws = 0
+  while (throws < max_throws) {
+    let v = throw_eye()
+    throws = throws + 1
+    if (v.x == 0 && v.z == 0) { log "eye lost or not seen; throwing again"; continue }
+    if (v.y < 0 - 3 && abs(v.x) < 6 && abs(v.z) < 6) {
+      log "the eye dropped here: stronghold below ${here}"
+      remember("stronghold", here, note: "eye of ender dropped straight down here")
+      return here
+    }
+    let m = max(abs(v.x), abs(v.z))
+    let tx = here.x + v.x / m * step
+    let tz = here.z + v.z / m * step
+    log "eye flew (${round(v.x)}, ${round(v.z)}); walking ${step} blocks that way to (${int(tx)}, ${int(tz)})"
+    try { timeout 4m { goto_xz(tx, tz, reach: 3) } } catch (e) { log "walk: ${e.kind} ${e.message}" }
+  }
+  fail "no stronghold found after ${max_throws} eyes"
+}
+
+/// Dig a staircase down, never straight down: each step is one block along and one down, and the
+/// block under the next step is checked for lava or a hole first. Returns where you stopped.
+script stairs_down(n: int = 20, dir: string = "east"): pos {
+  let sx = 0
+  let sz = 0
+  if (dir == "east") sx = 1
+  if (dir == "west") sx = 0 - 1
+  if (dir == "south") sz = 1
+  if (dir == "north") sz = 0 - 1
+  for (i of range(n)) {
+    let x = here.x + sx
+    let z = here.z + sz
+    let under = block_at(pos(x, here.y - 2, z))
+    if (under.liquid || under.air) { log "stopping: ${under.short} under the next step"; return here }
+    mine(pos(x, here.y + 1, z), collect: false)
+    mine(pos(x, here.y, z), collect: false)
+    mine(pos(x, here.y - 1, z), collect: false)
+    goto(pos(x, here.y - 1, z), reach: 0, timeout: 15s)
+  }
+  return here
+}
+
+/// Tunnel flat for n blocks in a direction (2 high). Returns where you stopped.
+script tunnel_flat(dir: string = "east", n: int = 24): pos {
+  let sx = 0
+  let sz = 0
+  if (dir == "east") sx = 1
+  if (dir == "west") sx = 0 - 1
+  if (dir == "south") sz = 1
+  if (dir == "north") sz = 0 - 1
+  for (i of range(n)) {
+    let x = here.x + sx
+    let z = here.z + sz
+    let floor = block_at(pos(x, here.y - 1, z))
+    if (floor.liquid) { log "lava/water ahead at ${floor.pos}; stopping"; return here }
+    mine(pos(x, here.y + 1, z), collect: false)
+    mine(pos(x, here.y, z), collect: false)
+    if (floor.air) place("cobblestone", pos(x, here.y - 1, z))
+    goto(pos(x, here.y, z), reach: 0, timeout: 15s)
+  }
+  return here
+}
+
+/// Look for the end portal frames from inside a stronghold, tunnelling outward when none are in sight.
+script find_portal_room(tries: int = 6): pos {
+  for (i of range(tries)) {
+    let frames = find_blocks("end_portal_frame", radius: 96, max: 12)
+    if (frames.empty == false) {
+      let f = frames.first
+      log "portal frames near ${f.pos}"
+      goto(f.pos, reach: 3, timeout: 3m)
+      remember("end_portal", f.pos, note: "end portal room")
+      return f.pos
+    }
+    let k = i % 4
+    let dir = "east"
+    if (k == 1) dir = "south"
+    if (k == 2) dir = "west"
+    if (k == 3) dir = "north"
+    log "no frames seen; tunnelling ${dir} to look further (${i + 1}/${tries})"
+    tunnel_flat(dir, 24)
+  }
+  fail "no end_portal_frame within ${tries} tunnels; move through the stronghold and find_blocks(\"end_portal_frame\") again"
+}
+
+/// Put an eye in every frame that will take one. Returns how many eyes were placed.
+script fill_portal(): int {
+  let frames = find_blocks("end_portal_frame", radius: 32, max: 12)
+  if (frames.empty) fail "no end_portal_frame nearby"
+  if (inventory.count("ender_eye") < 1) fail "no ender_eye to place"
+  let placed = 0
+  for (f of frames) {
+    if (inventory.count("ender_eye") < 1) break
+    let before = inventory.count("ender_eye")
+    goto(f.pos, reach: 3, timeout: 60s)
+    equip("ender_eye")
+    try { use_on(f.pos) } catch (e) { log "frame ${f.pos}: ${e.message}" }
+    wait 300ms
+    if (inventory.count("ender_eye") < before) placed = placed + 1
+  }
+  log "placed ${placed} eyes in ${len(frames)} frames"
+  return placed
+}
+
+/// Walk onto the end portal and wait to arrive.
+script enter_end(): string {
+  let portal = find_blocks("end_portal", radius: 32, max: 9)
+  if (portal.empty) fail "no end_portal block: all 12 frames need an eye first"
+  goto(portal.first.pos, reach: 0, timeout: 60s)
+  wait until dimension == "the_end" timeout 20s else { fail "stood on the portal but did not go" }
+  wait 4s
+  log "in the End at ${here}"
+  return dimension
+}

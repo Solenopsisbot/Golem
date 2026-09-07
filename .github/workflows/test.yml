@@ -14,4 +14,5 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: npm run check:shem
       # Live evals (tasks/basic) need a Minecraft server and a Claude login; they run on a dev box, not here.

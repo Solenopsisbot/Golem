@@ -272,3 +272,7 @@ The `shem_eval` tool takes `save: "shem/name.shem"`: the snippet is checked, wri
 ## What comes back
 
 A foreground run returns its status, the value it `return`ed (lists capped at 40 items, maps at 30 entries), its `log` lines, and an `[after]` line: position, health, held item, the inventory delta since the run started ("+9 melon_slice, -1 bone_meal"), and hostiles within 16. Background runs report the same into the inbox when they end. The point is that acting and observing are one call.
+
+## The endgame library
+
+`shem/lib/nether.shem`, `ender.shem` and `dragon.shem` are the road to the dragon as reusable scripts: `to_nether()`, `follow_eyes()` and `fill_portal()`/`enter_end()`, `beat_dragon()`. They lean on the bow primitives (`shoot`, `use_hold`, `use_release`) and dig defensively (staircases and floor checks, never straight down). `npm run check:shem` validates every library file against the block/item/entity registry with no body needed.

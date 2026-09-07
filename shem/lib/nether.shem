@@ -1,0 +1,61 @@
+/// Nether portal: build the obsidian frame with filler corners, light it from inside, walk through.
+/// The frame is 4 wide along x and 5 tall, standing on the row under `base`; `base` is the inside
+/// bottom-left. 10 obsidian plus 4 filler blocks (any solid block: corners are never obsidian).
+
+/// Build the frame. Returns the inside bottom-left position (stand there to light and enter).
+script build_portal(base: any = none): pos {
+  let b = base
+  if (b == none) b = pos(here.x + 2, here.y, here.z)
+  if (inventory.count("obsidian") < 10) fail "need 10 obsidian, have ${inventory.count("obsidian")}"
+  let filler = "cobblestone"
+  if (inventory.count(filler) < 4) {
+    if (inventory.count("dirt") >= 4) { filler = "dirt" } else { fail "need 4 filler blocks (cobblestone or dirt) for the corners" }
+  }
+  let bx = b.x - 1
+  let by = b.y
+  let bz = b.z
+  for (dx of range(4)) {
+    let g = pos(bx + dx, by - 1, bz)
+    if (block_at(g).solid == false) place(filler, g)
+  }
+  place(filler, pos(bx, by, bz))
+  place(filler, pos(bx + 3, by, bz))
+  place("obsidian", pos(bx + 1, by, bz))
+  place("obsidian", pos(bx + 2, by, bz))
+  for (dy of range(1, 4)) {
+    place("obsidian", pos(bx, by + dy, bz))
+    place("obsidian", pos(bx + 3, by + dy, bz))
+  }
+  place(filler, pos(bx, by + 4, bz))
+  place(filler, pos(bx + 3, by + 4, bz))
+  place("obsidian", pos(bx + 1, by + 4, bz))
+  place("obsidian", pos(bx + 2, by + 4, bz))
+  remember("portal", pos(bx + 1, by + 1, bz), note: "nether portal, inside bottom-left")
+  return pos(bx + 1, by + 1, bz)
+}
+
+/// Stand inside the frame, light it with flint and steel, and wait to be taken through.
+/// Works from either side of a portal: `inside` is any air block within the frame.
+script enter_portal(inside: pos): string {
+  let from = dimension
+  goto(inside, reach: 0, timeout: 45s)
+  if (block_at(inside).short != "nether_portal") {
+    if (inventory.count("flint_and_steel") < 1) fail "no flint_and_steel to light the portal"
+    equip("flint_and_steel")
+    use_on(pos(inside.x, inside.y - 1, inside.z))
+    wait until block_at(inside).short == "nether_portal" timeout 6s else { fail "portal did not light: is the frame complete (4 wide, 5 tall, corners filled or open)?" }
+  }
+  goto(inside, reach: 0, timeout: 15s)
+  wait until dimension != from timeout 25s else { fail "stood in the portal but never changed dimension; step out and back in" }
+  wait 3s
+  remember("portal_${dimension}", here, note: "arrived through the portal")
+  log "arrived in ${dimension} at ${here}"
+  return dimension
+}
+
+/// Build a portal next to you and go through. Returns the dimension you ended up in.
+script to_nether(): string {
+  if (dimension == "the_nether") return dimension
+  let inside = build_portal()
+  return enter_portal(inside)
+}

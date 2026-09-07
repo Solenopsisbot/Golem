@@ -1,0 +1,61 @@
+// The End: shoot the crystals, then the dragon.
+
+/// One bow shot at an entity, aimed `lift` blocks above it for the arrow's drop.
+script aimed_shot(e: entity, lift: float = 0) {
+  equip("bow")
+  look_at(vec(e.pos.x, e.pos.y + lift, e.pos.z))
+  use_hold(25)
+  use_release()
+}
+
+/// Shoot every end crystal in sight from the ground below its pillar. The tallest pillars are out of
+/// bow range from the ground: pillar up with blocks for those. Returns how many crystals were destroyed.
+script shoot_crystals(max_per: int = 8): int {
+  if (inventory.count("bow") < 1) fail "no bow"
+  let killed = 0
+  let crystals = find_entities("end_crystal", radius: 160)
+  log "${len(crystals)} crystals in sight"
+  for (c of crystals) {
+    try { timeout 2m { goto_xz(c.pos.x, c.pos.z, reach: 16) } } catch (e) { log "approach: ${e.kind} ${e.message}" }
+    let shots = 0
+    while (shots < max_per) {
+      let still = false
+      for (a of find_entities("end_crystal", radius: 80)) { if (a.id == c.id) still = true }
+      if (still == false) { killed = killed + 1; log "crystal ${c.id} destroyed"; break }
+      let d = max(abs(c.pos.x - here.x), abs(c.pos.z - here.z))
+      let up = c.pos.y - here.y
+      aimed_shot(c, lift: 0.5 + d * 0.08 + up * 0.05)
+      shots = shots + 1
+      wait 900ms
+    }
+  }
+  return killed
+}
+
+/// Fight the dragon: melee when it perches on the fountain, arrows when it flies within range,
+/// otherwise wait by the fountain. Returns true when no dragon is left.
+script fight_dragon(): bool {
+  repeat (700) {
+    let d = nearest("ender_dragon", radius: 250)
+    if (d == none) { log "no dragon in sight"; return true }
+    if (food < 14) { try { eat_something() } catch (e) { log "eat: ${e.kind}" } }
+    let near = max(abs(d.pos.x - here.x), abs(d.pos.z - here.z))
+    if (d.pos.y < here.y + 6 && near < 10) {
+      try { attack(d, timeout: 8s) } catch (e) { log "melee: ${e.kind}" }
+    } else {
+      if (near < 70) {
+        aimed_shot(d, lift: 1 + near * 0.06)
+      } else {
+        try { timeout 30s { goto_xz(0, 0, reach: 6) } } catch (e) { log "to the fountain: ${e.kind}" }
+      }
+    }
+    wait 1s
+  }
+  return nearest("ender_dragon", radius: 250) == none
+}
+
+/// Crystals first, then the dragon. Returns true when the dragon is dead.
+script beat_dragon(): bool {
+  shoot_crystals()
+  return fight_dragon()
+}
