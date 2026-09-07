@@ -25,6 +25,8 @@ export class EvalRunner {
   private aborted = false;
   /** Where a death in the End should put the bot back, re-asserted while the rung runs. */
   private endRespawn: { x: number; y: number; z: number } | null = null;
+  /** A vetted second respawn spot, used when the dragon is loitering on the first. undefined = not yet checked. */
+  private endRespawnAlt: { x: number; y: number; z: number } | null | undefined = undefined;
   constructor(opts: RunnerOptions) { this.opts = opts; }
 
   private async rconConnect(): Promise<Rcon> {
@@ -42,6 +44,7 @@ export class EvalRunner {
   private async reset(task: Task, bot: string): Promise<void> {
     const r = await this.rconConnect();
     this.endRespawn = null;
+    this.endRespawnAlt = undefined;
     const run = async (c: string) => { const out = await r.command(c.replace(/\{bot\}/g, bot)); log.debug(`rcon ${c} -> ${out.slice(0, 80)}`); };
     const s = task.setup;
     // Keep gear through death: a combat rung that respawns the bot into the fight must not strip it
@@ -211,7 +214,42 @@ export class EvalRunner {
     if (!p) return;
     try {
       const r = await this.rconConnect();
-      await r.command(`execute in minecraft:the_end run spawnpoint ${bot} ${p.x} ${p.y} ${p.z}`);
+      // Do not hand the bot back to a dragon that is parked on its bed. A fixed respawn inside the
+      // arena is an unwinnable loop the moment the dragon happens to loiter over it: run 30 sat at
+      // (-20, 59, 53) with the dragon at (-22.8, 84.2, 59.1) directly overhead, breathing on the spot,
+      // and every respawn was worth about fifteen seconds. Vanilla does not have this problem because
+      // dying in the End ejects you to the overworld and you walk back in through the portal.
+      //
+      // Mirroring the point across the island is the cheap equivalent of that walk: still on the
+      // island, still in the fight, just not underneath whatever killed you. It is a fairness measure
+      // and not combat help - it never improves the bot's position, it only declines to make it
+      // hopeless.
+      // Vet the alternative once and remember the answer. An invalid respawn is not a harmless
+      // mistake: vanilla clears the whole record the first time one fails, which is the stranding
+      // bug this method exists to prevent. Only points confirmed to be standable get used.
+      if (this.endRespawnAlt === undefined) {
+        const alt = { x: -p.x, y: p.y, z: -p.z };
+        let ok = false;
+        for (const dy of [0, 1, 2, -1, 3, -2]) {
+          const feet = await r.command(`execute in minecraft:the_end if block ${alt.x} ${alt.y + dy} ${alt.z} minecraft:air run data get entity ${bot} Health`);
+          const below = await r.command(`execute in minecraft:the_end unless block ${alt.x} ${alt.y + dy - 1} ${alt.z} minecraft:air run data get entity ${bot} Health`);
+          if (feet.includes("Health") && below.includes("Health")) { alt.y = alt.y + dy; ok = true; break; }
+        }
+        this.endRespawnAlt = ok ? alt : null;
+        log.info(ok ? `end respawn alternative vetted at ${alt.x},${alt.y},${alt.z}` : "no vetted end respawn alternative; keeping the original");
+      }
+      let spot = p;
+      const alt = this.endRespawnAlt;
+      if (alt) {
+        const out = await r.command(`execute in minecraft:the_end run data get entity @e[type=ender_dragon,limit=1] Pos`);
+        const at = out.match(/\[(-?[\d.]+)d, (-?[\d.]+)d, (-?[\d.]+)d\]/);
+        if (at) {
+          const dragon = { x: Number(at[1]), z: Number(at[3]) };
+          const near = (q: { x: number; z: number }) => Math.hypot(q.x - dragon.x, q.z - dragon.z);
+          if (near(p) < 24 && near(alt) > near(p)) spot = alt;
+        }
+      }
+      await r.command(`execute in minecraft:the_end run spawnpoint ${bot} ${spot.x} ${spot.y} ${spot.z}`);
     } catch { /* a probe must never take the run down with it */ }
   }
 
