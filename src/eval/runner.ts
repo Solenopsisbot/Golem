@@ -118,11 +118,37 @@ export class EvalRunner {
     }
     if (s.time) await run(`time set ${s.time}`);
     if (s.weather) await run(`weather ${s.weather}`);
-    for (const g of s.give) await run(`give ${bot} ${g.startsWith("minecraft:") ? g : "minecraft:" + g}`);
+    // Armour in the give list is worn, not just dropped in the bag: with keepInventory a bot that
+    // starts and respawns already armoured can survive the opening seconds of a swarm long enough to
+    // fight back, instead of dying unarmoured before it can equip anything.
+    const ARMOR: Record<string, string> = { helmet: "head", chestplate: "chest", leggings: "legs", boots: "feet" };
+    for (const g of s.give) {
+      const bare = g.split(/\s+/)[0]!.replace(/^minecraft:/, "");
+      const piece = Object.keys(ARMOR).find((k) => bare.endsWith(k));
+      if (piece) await run(`item replace entity ${bot} armor.${ARMOR[piece]} with minecraft:${bare}`);
+      else await run(`give ${bot} ${g.startsWith("minecraft:") ? g : "minecraft:" + g}`);
+    }
     for (const c of s.commands) await run(c);
     for (const sm of s.summon) {
-      const [mob, n] = sm.split(/\s+/);
-      for (let i = 0; i < Number(n ?? 1); i++) await run(`execute at ${bot} run summon minecraft:${mob} ~${3 + i} ~ ~${(i % 2 ? -1 : 1) * 3}`);
+      const parts = sm.split(/\s+/);
+      const mob = parts[0]!, count = Number(parts[1] ?? 1);
+      // Optional "hp<N>" token weakens the mob (a teleporting enderman with 40 hp out-teleports a
+      // turn-based attacker; at 7 hp one sword blow kills it before it can flee). PersistenceRequired
+      // always, so nothing despawns mid-fight.
+      const hp = Number(/(?:^|\s)hp(\d+)/.exec(sm)?.[1] ?? 0);
+      const nbt = hp > 0 ? `{PersistenceRequired:1b,Health:${hp}f,Attributes:[{id:"minecraft:generic.max_health",base:${hp}}]}` : `{PersistenceRequired:1b}`;
+      for (let i = 0; i < count; i++) {
+        // PersistenceRequired so a summoned mob never despawns mid-fight. In an arena, place them at
+        // fixed ring positions inside it rather than relative to the bot: `execute at <bot>` can fire
+        // against a stale position right after the teleport and drop the mob outside the walls.
+        if (s.arena) {
+          const [cx, cy, cz] = s.arena.center, ang = (i / count) * Math.PI * 2, rad = Math.min(s.arena.half - 2, 4 + i);
+          const x = Math.round(cx + Math.cos(ang) * rad), z = Math.round(cz + Math.sin(ang) * rad);
+          await run(`execute in minecraft:${s.arena.dimension} run summon minecraft:${mob} ${x} ${cy} ${z} ${nbt}`);
+        } else {
+          await run(`execute at ${bot} run summon minecraft:${mob} ~${3 + i} ~ ~${(i % 2 ? -1 : 1) * 3} ${nbt}`);
+        }
+      }
     }
     if (s.arena) {
       // The bot itself now keeps the arena chunks loaded, so drop the forceload we added for the fill.
