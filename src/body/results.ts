@@ -18,8 +18,9 @@ export interface StatusPlayer {
   weather?: "clear" | "rain" | "thunder";
   biome?: string;
   light?: { block: number; sky: number };
-  inWater?: boolean; inLava?: boolean; onFire?: boolean; sleeping?: boolean;
+  inWater?: boolean; inLava?: boolean; onFire?: boolean; sleeping?: boolean; sneaking?: boolean; sprinting?: boolean;
   fallDistance?: number; air?: number;
+  maxHealth?: number; absorption?: number; saturation?: number; armorPoints?: number;
   effects?: { id: string; amplifier: number; ticks: number }[];
   armor?: string[]; offhand?: string;
 }
@@ -29,7 +30,8 @@ export interface StatusResult {
   skippedFrames: number; controllers: number; singleplayer: boolean;
   screen: string; overlay: string;
   screenClass?: string;                        // (#17) raw class name; `screen` is the readable one
-  world?: { time?: number; day?: number; phase?: "dawn" | "day" | "dusk" | "night"; weather?: "clear" | "rain" | "thunder"; biome?: string; light?: { block: number; sky: number } };  // (#5)
+  /** (#5) `time` is a tick count on older bodies and `{timeOfDay, day, phase}` on protocol 2. */
+  world?: { time?: number | { timeOfDay: number; day?: number; phase?: string }; day?: number; phase?: "dawn" | "day" | "dusk" | "night"; weather?: "clear" | "rain" | "thunder"; biome?: string; light?: { block: number; sky: number } };
   server?: string;
   inWorld: boolean;
   player?: StatusPlayer;

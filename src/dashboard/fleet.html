@@ -39,7 +39,7 @@
   </div>
 </div>
 <script type="module">
-import { auth, api, stream, toast, md, pinned, esc, hhmm, short, hpClass, phaseTag } from "/dashboard/common.js";
+import { auth, api, stream, toast, md, pinned, esc, hhmm, short, hpClass, phaseTag, slotHtml } from "/dashboard/common.js";
 const A = await auth(); const X = api(A);
 document.getElementById("fleetname").textContent = A.cfg.fleet && A.cfg.fleet !== "golem" ? A.cfg.fleet : "";
 const feed = document.getElementById("feed"); const pin = pinned(feed, document.getElementById("jump"));
@@ -47,30 +47,55 @@ const last = {}; let shared = { tasks: "", places: "", chests: "" }; let tab = "
 const filters = new Set(["said", "bus", "turn", "reflex"]);
 setInterval(() => document.getElementById("clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), 1000);
 
+function hotbar(inv) {
+  if (!inv) return "";
+  const by = new Map(inv.items.map((i) => [i.slot, i]));
+  return `<div class="hotbar" title="hotbar; the outlined slot is in hand">${Array.from({ length: 9 }, (_, s) => slotHtml(by.get(s), { sel: s === inv.selectedSlot })).join("")}</div>`;
+}
 function card(a) {
   const l = last[a.name] || {};
   const hp = Number(a.hp ?? 0), food = Number(a.food ?? 0);
-  return `<div class="card ${a.dead ? "dead" : ""}" data-agent="${esc(a.name)}">
-    <div class="name"><b>${esc(a.name)}</b><span class="where">${a.inWorld ? esc(a.pos) + " · " + esc(a.dimension) : "not in world"}</span><span class="sp"></span>
-      ${a.dead ? '<span class="tag dead">dead</span>' : ""}${a.reflex ? `<span class="tag reflex">${esc(a.reflex)}</span>` : ""}${phaseTag(a.phase, a.weather)}</div>
+  const conn = !a.connected ? '<span class="tag dead">body offline</span>' : !a.inWorld ? '<span class="tag">not in world</span>' : "";
+  return `<div class="name"><b>${esc(a.name)}</b><span class="where">${a.inWorld ? esc(a.pos) + " · " + esc(a.dimension) : ""}</span><span class="sp"></span>
+      ${conn}${a.dead ? '<span class="tag dead">dead</span>' : ""}${a.reflex ? `<span class="tag reflex">${esc(a.reflex)}</span>` : ""}${a.xp != null ? `<span class="tag" title="experience level">lvl ${a.xp}</span>` : ""}${phaseTag(a.phase, a.weather)}</div>
     <div class="bars"><span class="k">health</span><span class="bar hp ${hpClass(hp)}"><i style="width:${Math.max(0, Math.min(100, hp / 20 * 100))}%"></i></span><span class="v">${hp.toFixed(0)}/20</span>
       <span class="k">food</span><span class="bar food"><i style="width:${Math.max(0, Math.min(100, food / 20 * 100))}%"></i></span><span class="v">${food}/20</span></div>
-    <div class="kv"><span class="k">holding</span><span class="v">${esc(a.held || "nothing")}</span>
-      <span class="k">doing</span><span class="v">${esc(a.doing || (a.pathing ? "walking" : "idle"))}</span>
+    <div class="kv"><span class="k">server</span><span class="v mono" title="${esc(a.username)} on ${esc(a.server)}">${esc(a.server)}${a.username && a.username !== a.name ? ` <span class="faint">as ${esc(a.username)}</span>` : ""}${a.gamemode && a.gamemode !== "survival" ? ` <span class="faint">· ${esc(a.gamemode)}</span>` : ""}</span>
+      <span class="k">holding</span><span class="v">${esc(a.held || "nothing")}</span>
+      <span class="k">doing</span><span class="v">${esc(a.doing || (a.pathing ? "walking" : a.busy ? "thinking" : "idle"))}</span>
       ${l.turn ? `<span class="k">last turn</span><span class="v">${esc(l.turn)}</span>` : ""}</div>
+    ${hotbar(l.inv)}
     ${l.say ? `<div class="said"><span class="t">${hhmm(l.sayT)}</span>${esc(l.say)}</div>` : ""}
     ${a.goal ? `<details><summary class="goal"><b>goal</b> ${esc(short(a.goal, 90))}</summary><div class="goal">${esc(a.goal)}</div></details>` : `<div class="goal faint">no goal</div>`}
-    <div class="foot"><a class="btn sm" href="${a.dash}">open ${esc(a.name)} ↗</a><span class="sp"></span><button class="btn sm danger" data-met="${esc(a.name)}">met</button></div>
-  </div>`;
+    <div class="foot"><a class="btn sm" href="${a.dash}">open ${esc(a.name)} ↗</a><span class="sp"></span><button class="btn sm danger" data-met="${esc(a.name)}">met</button></div>`;
 }
+const cardHtml = {};
+/** Re-render only the cards whose HTML changed, so an open goal <details> survives the 3 s state tick. */
 function render(agents) {
   rows = agents;
-  document.getElementById("cards").innerHTML = agents.map(card).join("") || `<div class="empty">no agents registered</div>`;
+  const wrap = document.getElementById("cards");
+  if (!agents.length) { wrap.innerHTML = `<div class="empty">no agents registered</div>`; return; }
+  if (wrap.firstElementChild?.classList.contains("empty")) wrap.innerHTML = "";
+  const seen = new Set();
+  for (const a of agents) {
+    seen.add(a.name);
+    let el = wrap.querySelector(`.card[data-agent="${CSS.escape(a.name)}"]`);
+    if (!el) { el = document.createElement("div"); el.dataset.agent = a.name; wrap.appendChild(el); }
+    el.className = `card ${a.dead ? "dead" : ""}`;
+    const html = card(a);
+    if (cardHtml[a.name] !== html) { const open = el.querySelector("details")?.open; el.innerHTML = html; cardHtml[a.name] = html; if (open) { const d = el.querySelector("details"); if (d) d.open = true; } }
+  }
+  for (const el of [...wrap.querySelectorAll(".card")]) if (!seen.has(el.dataset.agent)) { el.remove(); delete cardHtml[el.dataset.agent]; }
   document.getElementById("count").textContent = `${agents.length} golem${agents.length === 1 ? "" : "s"}`;
   const sel = document.getElementById("target"); const cur = sel.value;
   sel.innerHTML = `<option value="*">everyone</option>` + agents.map((a) => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join("");
   if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
   document.querySelectorAll("[data-met]").forEach((b) => b.onclick = async () => { await X.post(`/agents/${encodeURIComponent(b.dataset.met)}/met`); toast(`${b.dataset.met}: met`); });
+}
+/** Hotbars come from each agent's /info (a live body read, cached server-side); polled gently. */
+async function refreshHotbars() {
+  await Promise.all(rows.map(async (a) => { try { const i = await X.get(`/agents/${encodeURIComponent(a.name)}/info`); last[a.name] = { ...(last[a.name] || {}), inv: i.inventory }; } catch {} }));
+  render(rows);
 }
 function add(cls, who, html, t = Date.now(), pill = cls) {
   if (feed.firstElementChild?.classList.contains("empty")) feed.innerHTML = "";
@@ -112,6 +137,7 @@ try {
 } catch (e) { document.getElementById("cards").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 stream(A.withToken("/fleet/events"), H, (st) => { const el = document.getElementById("live"); el.className = `live ${st}`; document.getElementById("livetxt").textContent = st === "on" ? "live" : "reconnecting…"; });
 setInterval(loadShared, 30000);
+refreshHotbars(); setInterval(refreshHotbars, 5000);
 </script>
 </body>
 </html>

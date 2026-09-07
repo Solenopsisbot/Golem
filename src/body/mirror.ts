@@ -167,9 +167,13 @@ export class Mirror {
       else if (this.dead && p.health > 0) this.dead = false;
     }
     if (s.world) {
-      if (s.world.phase) this.phase = s.world.phase;
+      // Protocol 2 nests the clock as world.time = {timeOfDay, day, phase}; older bodies put day/phase beside it.
+      const t = typeof s.world.time === "object" && s.world.time ? s.world.time : undefined;
+      const phase = s.world.phase ?? t?.phase;
+      if (phase === "dawn" || phase === "day" || phase === "dusk" || phase === "night") this.phase = phase;
       if (s.world.weather) this.weather = s.world.weather;
-      if (typeof s.world.day === "number") this.day = s.world.day;
+      const day = s.world.day ?? t?.day;
+      if (typeof day === "number") this.day = day;
     }
     this.changed("status");
     return s;

@@ -6,10 +6,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/dashboard/style.css">
 <style>
-  .wrap { grid-template-columns: minmax(0, 1fr) 380px; height: calc(100vh - 47px); }
+  .wrap { grid-template-columns: minmax(0, 1fr) 404px; height: calc(100vh - 47px); }
   .wrap.two { grid-template-rows: minmax(0, 1fr); }
   aside { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; overflow: auto; }
   aside .panel { flex: 0 0 auto; max-height: 34vh; }
+  aside .panel.body { max-height: none; }
   aside .panel.grow { flex: 1 1 auto; }
   #feedwrap { position: relative; }
   .statebar { display: flex; gap: 14px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--muted); flex-wrap: wrap; }
@@ -21,6 +22,7 @@
 <header class="top">
   <div class="brand"><span class="mark"></span><a href="/" style="color:inherit">Golem</a><small id="fleetname"></small></div>
   <span class="crumb">/ <b id="title" style="color:var(--fg)"></b></span>
+  <span class="conn" id="conn" title="the body's Minecraft account and the server it is on"></span>
   <span class="spacer"></span>
   <span class="meter" id="ctx" title="context in the mind's window"></span>
   <span class="live" id="live"><span class="dot"></span><span id="livetxt">connecting</span></span>
@@ -38,6 +40,7 @@
     <form class="composer" id="composer"><input id="text" placeholder="say something…" autocomplete="off"><button class="btn primary">send</button></form>
   </section>
   <aside>
+    <section class="panel body"><div class="hd"><span class="tabs" id="btabs"><button class="on" data-t="inventory">inventory</button><button data-t="body">body</button><button data-t="mind">mind</button></span><span class="sp"></span><span class="n" id="bodyn"></span></div><div class="bd scroll" id="bodypanel"><div class="empty">…</div></div></section>
     <section class="panel"><div class="hd">Picture <span class="sp"></span><button class="btn sm ghost" id="fresh">take a new one</button></div><img class="shot" id="shot" alt=""></section>
     <section class="panel"><div class="hd">Reflexes <span class="sp"></span><span class="n" id="reflexn"></span></div><div class="bd scroll" id="reflexes"></div></section>
     <section class="panel"><div class="hd">Runs <span class="sp"></span><span class="n" id="runsn"></span></div><div class="bd scroll list" id="runs"></div></section>
@@ -45,14 +48,14 @@
   </aside>
 </div>
 <script type="module">
-import { auth, api, stream, toast, pinned, esc, hhmm, short, hpClass, phaseTag } from "/dashboard/common.js";
+import { auth, api, stream, toast, pinned, esc, hhmm, short, hpClass, phaseTag, slotHtml, itemLabel, mcClock, facing, fmtK, ago, dur, barHtml } from "/dashboard/common.js";
 const agent = decodeURIComponent(location.pathname.split("/")[2] || "");
 const A = await auth(); const X = api(A); const base = `/agents/${encodeURIComponent(agent)}`;
 document.getElementById("title").textContent = agent; document.title = `Golem · ${agent}`;
 document.getElementById("fleetname").textContent = A.cfg.fleet && A.cfg.fleet !== "golem" ? A.cfg.fleet : "";
 const feed = document.getElementById("feed"); const pin = pinned(feed, document.getElementById("jump"));
 const filters = new Set(["prompt", "agent", "tool", "said", "turn", "inbox", "reflex"]);
-let agentBuf = null;
+let agentBuf = null; let info = null; let btab = localStorage.getItem("golem.btab") || "inventory";
 function add(cls, html, t = Date.now(), pill = cls) {
   if (feed.firstElementChild?.classList.contains("empty")) feed.innerHTML = "";
   const d = document.createElement("div"); d.className = `row ${cls}`; d.dataset.f = cls.split(" ")[0] === "sys" ? "turn" : cls.split(" ")[0];
@@ -69,7 +72,7 @@ const H = {
   hello: (d) => setState(d.state),
   prompt: (d) => { flush(); const first = d.text.split("\n")[0]; add("prompt", `<details><summary>${esc(short(first.replace(/^\[state\]\s*/, ""), 140))}${d.queued ? ' <span class="faint">(queued into the running turn)</span>' : ""}</summary><div>${esc(d.text)}</div></details>`, d.t, d.planning ? "plan" : "prompt"); },
   agent_text: (d) => { if (!agentBuf) { agentBuf = add("agent", "", d.t, agent); agentBuf.dataset.text = ""; } agentBuf.dataset.text += d.text; agentBuf.querySelector(".txt").textContent = agentBuf.dataset.text; pin.after(); },
-  golem_tool: (d) => { flush(); if (d.name === "say") return; add(`tool${d.isError ? " err" : ""}`, toolRow(d), d.t, "tool"); },
+  golem_tool: (d) => { flush(); if (d.name === "say") return; add(`tool${d.isError ? " err" : ""}`, toolRow(d), d.t, "tool"); if (/inventory|craft|equip|deposit|withdraw|drop|eat|smelt|mine|collect|shem/.test(d.name)) setTimeout(refreshInfo, 400); },
   said: (d) => { flush(); add("said", esc(d.text), d.t, "said"); },
   turn_end: (d) => { flush(); add("turn", `turn ${esc(d.stopReason)} · ${(d.ms / 1000).toFixed(1)}s · ${d.toolCalls ?? 0} calls${d.tokens ? ` · ${Math.round(d.tokens / 1000)}k tokens` : ""}${d.model ? ` · ${esc(d.model)}` : ""}`, d.t); },
   inbox: (d) => { const it = d.item || d; if (it.kind === "goal_tick") return; add("inbox", `${esc(it.kind)}${it.from ? " · " + esc(it.from) : ""}: ${esc(short(it.text, 220))}`, d.t); refreshInbox(); },
@@ -81,14 +84,107 @@ function setState(s) {
   const hp = Number(/hp (\d+)/.exec(st)?.[1] ?? 0), food = Number(/food (\d+)/.exec(st)?.[1] ?? 0);
   const pos = /\((-?\d+), (-?\d+), (-?\d+)\) (\w+)/.exec(st); const phase = /\| (day|night|dawn|dusk|noon|midnight)[^|]*/.exec(st)?.[0]?.replace("| ", "");
   const held = /held ([^|]+)/.exec(st)?.[1]?.trim(); const doing = /doing: ([^|]+)/.exec(st)?.[1]?.trim(); const goal = /goal: (.*)$/.exec(st)?.[1]?.trim(); const dead = /DEAD/.test(st); const reflex = /reflex (\S+) acting/.exec(st)?.[1];
+  const p = info?.player; const xp = p?.xpLevel != null ? `<span class="xp" title="experience level ${p.xpLevel}, ${Math.round((p.xpProgress || 0) * 100)}% to the next">lvl <b>${p.xpLevel}</b>${barHtml((p.xpProgress || 0) * 100)}</span>` : "";
+  const cond = p ? [p.onFire && ["on fire", "dead"], p.inLava && ["in lava", "dead"], p.inWater && p.air != null && p.air < 300 && [`drowning ${Math.round(p.air / 20)}s`, "dead"], p.inWater && !(p.air < 300) && ["in water", ""], p.sleeping && ["asleep", "night"], p.absorption > 0 && [`+${Math.round(p.absorption)} absorb`, ""]].filter(Boolean).map(([t, c]) => `<span class="tag ${c}">${t}</span>`).join("") : "";
+  const fx = p?.effects?.length ? p.effects.map((e) => `<span class="tag ${/poison|wither|weakness|slowness|blindness|hunger|nausea|mining_fatigue|darkness|levitation|bad_omen/.test(e.id) ? "dead" : "night"}" title="${esc(itemLabel(e.id))} ${e.amplifier + 1}, ${e.seconds}s left">${esc(itemLabel(e.id))}${e.amplifier ? " " + (e.amplifier + 1) : ""} <span class="faint">${e.seconds}s</span></span>`).join("") : "";
   document.getElementById("statebar").innerHTML = `
-    <span class="mono">${pos ? `${pos[1]}, ${pos[2]}, ${pos[3]} · ${esc(pos[4])}` : esc(st.split("|")[1] || "")}</span>
+    <span class="mono">${pos ? `${pos[1]}, ${pos[2]}, ${pos[3]} · ${esc(pos[4])}` : esc(st.split("|")[1] || "")}${p?.biome ? ` <span class="faint">${esc(itemLabel(p.biome))}</span>` : ""}</span>
     <span class="bars"><span class="k">hp</span><span class="bar hp ${hpClass(hp)}"><i style="width:${hp / 20 * 100}%"></i></span><span class="v">${hp}</span><span class="k">food</span><span class="bar food"><i style="width:${food / 20 * 100}%"></i></span><span class="v">${food}</span></span>
-    ${dead ? '<span class="tag dead">dead</span>' : ""}${reflex ? `<span class="tag reflex">${esc(reflex)}</span>` : ""}${phaseTag(phase, null)}
+    ${xp}${dead ? '<span class="tag dead">dead</span>' : ""}${reflex ? `<span class="tag reflex">${esc(reflex)}</span>` : ""}${phaseTag(phase, null)}${cond}${fx}
     <span class="kv">holding <b>${esc(held || "nothing")}</b></span>${doing ? `<span class="kv">doing <b>${esc(doing)}</b></span>` : ""}
     ${goal ? `<span class="kv" title="${esc(goal)}">goal <b>${esc(short(goal, 70))}</b></span>` : '<span class="faint">no goal</span>'}`;
 }
-async function refreshStatus() { try { setState(await X.get(`${base}/status`)); } catch (e) { document.getElementById("statebar").textContent = "offline: " + e.message; } }
+let lastState = "";
+async function refreshStatus() { try { lastState = await X.get(`${base}/status`); setState(lastState); } catch (e) { document.getElementById("statebar").textContent = "offline: " + e.message; } }
+
+/* ---- the Body panel: inventory / body / mind ---- */
+const range = (a, b) => Array.from({ length: b - a }, (_, i) => a + i);
+function invHtml(i) {
+  const inv = i.inventory;
+  if (!inv) return `<div class="empty">${esc(i.inventoryError || "no inventory yet")}</div>`;
+  const by = new Map(inv.items.map((it) => [it.slot, it]));
+  const cell = (slot, ph) => slotHtml(by.get(slot), { sel: slot === inv.selectedSlot, ph });
+  const totals = {}; for (const it of inv.items) if (it.slot <= 35) totals[it.item] = (totals[it.item] || 0) + it.count;
+  const chips = Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span>${esc(itemLabel(k))}<b>×${n}</b></span>`).join("");
+  return `<div class="inv">
+    <div class="rowlab"><span>armour · offhand</span><span>${inv.free} free slot${inv.free === 1 ? "" : "s"}</span></div>
+    <div class="grid5">${cell(39, "helmet")}${cell(38, "chest")}${cell(37, "legs")}${cell(36, "boots")}${cell(40, "offhand")}</div>
+    <div class="rowlab"><span>inventory</span></div>
+    <div class="grid9">${range(9, 36).map((s) => cell(s)).join("")}</div>
+    <div class="rowlab"><span>hotbar</span><span>holding slot ${inv.selectedSlot + 1}</span></div>
+    <div class="grid9">${range(0, 9).map((s) => cell(s)).join("")}</div>
+  </div>${chips ? `<div class="chiplist">${chips}</div>` : ""}`;
+}
+const dot = (ok, warn) => `<span class="dotst ${ok ? "on" : warn ? "warn" : "bad"}"></span>`;
+const kv = (k, v, cls = "") => `<span class="k">${k}</span><span class="v ${cls}">${v}</span>`;
+function bodyHtml(i) {
+  const b = i.body, p = i.player, w = i.world;
+  const ents = Object.entries(i.entities || {}).sort((a, c) => c[1] - a[1]);
+  return `<div class="facts">
+    <span class="h">connection</span>
+    ${kv("body", `${dot(b.connected && b.inWorld, b.connected)}${b.connected ? (b.inWorld ? "in the world" : "connected, not in a world") : "not connected"}${b.dead ? ' <span class="tag dead">dead</span>' : ""}`)}
+    ${kv("server", `${esc(b.server)}${b.reportedServer && b.reportedServer !== b.server ? `<span class="faint">(body reports ${esc(b.reportedServer)})</span>` : ""}${b.singleplayer ? '<span class="faint">singleplayer</span>' : ""}`, "mono")}
+    ${kv("account", esc(b.username), "mono")}
+    ${kv("control", `${esc(b.control)}<span class="faint">${b.attached ? "attached" : "spawned by golem"}${b.protocol ? ` · protocol ${b.protocol}` : ""}</span>`, "mono")}
+    ${kv("client", `${b.headless == null ? "–" : b.headless ? "headless" : "windowed"}<span class="faint">· nav ${esc(b.navBackend || "?")} · shots ${esc(b.screenshotBackend || "?")}</span>`)}
+    ${kv("last tick", `${ago(b.lastTickAgo)}<span class="faint">· status ${ago(b.lastStatusAgo)}</span>`)}
+    <span class="h">player</span>
+    ${kv("position", `${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}<span class="faint">${esc(p.dimension)}</span>`, "mono")}
+    ${kv("facing", `${facing(p.yaw)}<span class="faint">yaw ${Math.round(p.yaw)}° · pitch ${Math.round(p.pitch)}°${p.onGround === false ? " · airborne" : ""}</span>`)}
+    ${kv("biome", `${esc(itemLabel(p.biome || "?"))}${p.light ? `<span class="faint">· light ${p.light.block} block / ${p.light.sky} sky</span>` : ""}`)}
+    ${kv("xp", p.xpLevel == null ? "–" : `${barHtml((p.xpProgress || 0) * 100, "xp")}level ${p.xpLevel}`)}
+    ${kv("mode", `${esc(p.gamemode || "?")}${p.pathing ? '<span class="faint">· pathing</span>' : ""}${p.sprinting ? '<span class="faint">· sprinting</span>' : ""}${p.sneaking ? '<span class="faint">· sneaking</span>' : ""}${p.usingItem ? '<span class="faint">· using item</span>' : ""}`)}
+    ${kv("condition", [p.onFire && "on fire", p.inLava && "in lava", p.inWater && (p.air != null && p.air < 300 ? `drowning (${Math.round(p.air / 20)}s of air)` : "in water"), p.sleeping && "asleep", p.fallDistance > 3 && `falling ${p.fallDistance.toFixed(0)} blocks`].filter(Boolean).join(", ") || '<span class="faint">fine</span>')}
+    ${kv("armour", `${p.armorPoints != null ? `${p.armorPoints} point${p.armorPoints === 1 ? "" : "s"}` : "–"}${p.armor?.some(Boolean) ? `<span class="faint">· ${p.armor.map((a) => a ? itemLabel(a) : "–").map(esc).join(", ")}</span>` : ""}`)}
+    ${kv("food", `${p.food} / 20${p.saturation != null ? `<span class="faint">· saturation ${p.saturation.toFixed(1)}</span>` : ""}${p.absorption > 0 ? `<span class="faint">· absorption ${Math.round(p.absorption)}</span>` : ""}`)}
+    ${p.effects?.length ? kv("effects", p.effects.map((e) => `${esc(itemLabel(e.id))}${e.amplifier ? " " + (e.amplifier + 1) : ""} <span class="faint">${e.seconds}s</span>`).join(", ")) : ""}
+    ${b.screen ? kv("screen", esc(b.screen), "mono") : ""}
+    ${p.lastDamageAgo != null && p.lastDamageAgo < 600000 ? kv("hurt", `${ago(p.lastDamageAgo)}${p.lastAttacker ? `<span class="faint">by ${esc(itemLabel(p.lastAttacker))}</span>` : ""}`) : ""}
+    <span class="h">world</span>
+    ${kv("clock", `${w.day != null ? `day ${w.day}` : ""}${w.time != null ? ` · ${mcClock(w.time)}` : ""}${w.phase ? ` · ${esc(w.phase)}` : ""}${w.weather && w.weather !== "clear" ? ` · ${esc(w.weather)}` : ""}` || "–")}
+    ${kv("players", i.players.length ? i.players.map((n) => `<span class="mono">${esc(n)}</span>`).join(", ") : '<span class="faint">nobody else online</span>')}
+    ${kv("nearby", ents.length ? ents.slice(0, 12).map(([t, n]) => `${esc(itemLabel(t))}${n > 1 ? ` ×${n}` : ""}`).join(", ") + (ents.length > 12 ? ` <span class="faint">+${ents.length - 12} more</span>` : "") : '<span class="faint">nothing within 24 blocks</span>')}
+  </div>`;
+}
+function mindHtml(i) {
+  const m = i.mind, a = i.activity;
+  const pct = (n, d) => d ? n / d * 100 : 0;
+  const prof = (p) => [p.model || "default", p.effort].filter(Boolean).join(" ");
+  return `<div class="facts">
+    ${kv("adapter", esc(m.adapter), "mono")}
+    ${kv("model", `${esc(m.model || "default")}${m.profile ? `<span class="faint">· ${esc(m.profile)} profile</span>` : ""}`, "mono")}
+    ${kv("state", m.busy ? `${dot(true)}in a turn${m.turnStartedAt ? ` <span class="faint">for ${dur(Date.now() - m.turnStartedAt)}</span>` : ""}` : `<span class="dotst"></span>idle<span class="faint">since ${ago(Date.now() - m.lastTurnEndedAt)}</span>`)}
+    ${kv("session", m.sessionId ? `${esc(short(m.sessionId, 18))}${m.resumed ? '<span class="faint">resumed</span>' : ""}` : '<span class="faint">none yet</span>', "mono")}
+    <span class="h">this hour</span>
+    ${kv("turns", `${barHtml(pct(m.turnsThisHour, m.budget.turns_per_hour), "budget" + (pct(m.turnsThisHour, m.budget.turns_per_hour) > 80 ? " hot" : ""))}${m.turnsThisHour} / ${m.budget.turns_per_hour}`)}
+    ${kv("tokens", `${barHtml(pct(m.tokensThisHour, m.budget.tokens_per_hour), "budget" + (pct(m.tokensThisHour, m.budget.tokens_per_hour) > 80 ? " hot" : ""))}${fmtK(m.tokensThisHour)} / ${fmtK(m.budget.tokens_per_hour)}`)}
+    ${kv("context", `${barHtml(pct(m.contextUsed, m.compactWindow), "budget" + (pct(m.contextUsed, m.compactWindow) > 80 ? " hot" : ""))}${fmtK(m.contextUsed)} / ${fmtK(m.compactWindow)}<span class="faint">· ${m.compactions} compaction${m.compactions === 1 ? "" : "s"}</span>`)}
+    ${m.lastTurnToolCalls >= 0 ? kv("last turn", `${m.lastTurnToolCalls} tool call${m.lastTurnToolCalls === 1 ? "" : "s"}`) : ""}
+    <span class="h">doing</span>
+    ${kv("goal", a.goal ? esc(a.goal) : '<span class="faint">none</span>')}
+    ${kv("now", `${esc(a.doing || "idle")}${a.reflex ? `<span class="tag reflex">${esc(a.reflex)}</span>` : ""}${a.runs ? `<span class="faint">· ${a.runs} script${a.runs === 1 ? "" : "s"} running</span>` : ""}`)}
+    <span class="h">config</span>
+    ${kv("plan turns", esc(prof(m.profiles.plan)), "mono")}
+    ${kv("act turns", esc(prof(m.profiles.act)), "mono")}
+    <details><summary>command</summary><div>${esc(m.command)}</div></details>
+  </div>`;
+}
+function renderBody() {
+  const el = document.getElementById("bodypanel");
+  if (!info) return;
+  el.innerHTML = btab === "inventory" ? invHtml(info) : btab === "body" ? bodyHtml(info) : mindHtml(info);
+  const n = document.getElementById("bodyn");
+  n.textContent = btab === "inventory" && info.inventory ? `${info.inventory.items.filter((x) => x.slot <= 35).length} stacks` : btab === "body" ? (info.body.inWorld ? info.body.server : "offline") : (info.mind.model || "");
+}
+async function refreshInfo() {
+  try {
+    info = await X.get(`${base}/info`);
+    const b = info.body; document.getElementById("conn").textContent = `${b.username} @ ${b.server}`;
+    renderBody(); if (lastState) setState(lastState);
+  } catch (e) { document.getElementById("bodypanel").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+document.querySelectorAll("#btabs button").forEach((b) => { b.classList.toggle("on", b.dataset.t === btab); b.onclick = () => { document.querySelectorAll("#btabs button").forEach((x) => x.classList.remove("on")); b.classList.add("on"); btab = b.dataset.t; localStorage.setItem("golem.btab", btab); renderBody(); }; });
+
 async function refreshRuns() { try { const rs = await X.get(`${base}/runs`); document.getElementById("runsn").textContent = rs.filter((r) => r.status === "running").length ? `${rs.filter((r) => r.status === "running").length} running` : ""; document.getElementById("runs").innerHTML = rs.length ? rs.map((r) => `<div class="item"><span class="st ${esc(r.status)}">${esc(r.status)}</span><span class="lb" title="${esc(r.label)}">${esc(r.label)}${r.background ? ' <span class="faint">bg</span>' : ""}${r.current && r.status === "running" ? ` <span class="faint">· ${esc(r.current)}</span>` : ""}</span><span class="t">${hhmm(r.startedAt)}</span></div>`).join("") : `<div class="empty">no runs yet</div>`; } catch {} }
 async function refreshReflexes() { try { const rs = await X.get(`${base}/reflexes`); document.getElementById("reflexn").textContent = `${rs.filter((r) => r.on).length}/${rs.length} on`; document.getElementById("reflexes").innerHTML = rs.map((r) => `<div class="toggle ${r.on ? "on" : ""} ${r.active ? "active" : ""}" data-name="${esc(r.name)}"><span class="sw"></span><span class="nm">${esc(r.name)}<small>${esc(r.description)}</small></span><span class="p">p${r.priority}</span></div>`).join(""); document.querySelectorAll("#reflexes .toggle").forEach((el) => el.querySelector(".sw").onclick = async () => { const on = !el.classList.contains("on"); await X.post(`${base}/reflexes`, { name: el.dataset.name, on }); el.classList.toggle("on", on); toast(`${el.dataset.name} ${on ? "on" : "off"}`); }); } catch {} }
 async function refreshInbox() { try { const it = await X.get(`${base}/inbox`); document.getElementById("inboxn").textContent = it.length ? `${it.length} waiting` : ""; document.getElementById("inbox").innerHTML = it.length ? it.map((i) => `<div class="item"><span class="st queued">${esc(i.kind)}</span><span class="lb" title="${esc(i.text)}">${i.from ? `<b>${esc(i.from)}</b>: ` : ""}${esc(i.text)}</span><span class="t">p${i.priority}</span></div>`).join("") : `<div class="empty">nothing waiting: the mind is caught up</div>`; } catch {} }
@@ -116,8 +212,8 @@ if (!agent) { document.body.innerHTML = '<div class="gate"><form><h1>Golem</h1><
 else {
   await loadTranscript();
   stream(A.withToken(`${base}/events`), H, (st) => { const el = document.getElementById("live"); el.className = `live ${st}`; document.getElementById("livetxt").textContent = st === "on" ? "live" : "reconnecting…"; });
-  refreshStatus(); refreshRuns(); refreshReflexes(); refreshInbox(); refreshShot(false);
-  setInterval(refreshStatus, 2000); setInterval(refreshRuns, 3000); setInterval(refreshReflexes, 6000); setInterval(refreshInbox, 5000); setInterval(() => refreshShot(false), 60000);
+  refreshStatus(); refreshInfo(); refreshRuns(); refreshReflexes(); refreshInbox(); refreshShot(false);
+  setInterval(refreshStatus, 2000); setInterval(refreshInfo, 2500); setInterval(refreshRuns, 3000); setInterval(refreshReflexes, 6000); setInterval(refreshInbox, 5000); setInterval(() => refreshShot(false), 60000);
 }
 </script>
 </body>

@@ -59,6 +59,21 @@ export class Drive {
   compactions = 0;
   /** Tool calls in the previous turn, shown in the state header as a nudge toward batching. */
   private lastTurnToolCalls = -1;
+
+  /**
+   * Counters for the dashboard's mind panel: what the mind is running on and how much of the hourly
+   * budget it has spent. Same one-hour window as waitForBudget, read without mutating.
+   */
+  stats(): { model: string; profile: string; sessionId: string | undefined; resumed: boolean; busy: boolean; turnsThisHour: number; tokensThisHour: number; contextUsed: number; compactions: number; lastTurnToolCalls: number; lastTurnEndedAt: number; turnStartedAt: number } {
+    const hour = 3_600_000, now = Date.now();
+    return {
+      model: this.mind.currentModel, profile: this.mind.profile, sessionId: this.mind.sessionId, resumed: this.mind.resumed, busy: this.mind.busy,
+      turnsThisHour: this.turnTimes.filter((t) => now - t <= hour).length,
+      tokensThisHour: this.tokenSpend.filter((x) => now - x.t <= hour).reduce((s, x) => s + x.n, 0),
+      contextUsed: this.lastContextUsed, compactions: this.compactions, lastTurnToolCalls: this.lastTurnToolCalls,
+      lastTurnEndedAt: this.lastTurnEndedAt, turnStartedAt: this.mind.busy ? this.turnStartedAt : 0,
+    };
+  }
   private deathLoopUntil = 0;   // while set, deaths/damage don't wake the mind; reflexes carry on
 
   constructor(opts: DriveOptions) {

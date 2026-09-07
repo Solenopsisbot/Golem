@@ -6,6 +6,7 @@
 //   /agents/<name>/events   GET  text/event-stream                  live transcript + events (bridge)
 //   /agents/<name>/dash     GET  the dashboard page (token in ?token=, remembered by the page)
 //   /agents/<name>/runs, /reflexes (GET/POST), /inbox (GET), /transcript, /shot, /met   dashboard data
+//   /agents/<name>/info     GET  the whole picture: body connection, player, world, inventory, mind
 //   /dash                   GET  the fleet page: every agent, the bus, the shared files
 //   /fleet/status|bus|shared|events   fleet data (any agent's token works)
 //   /fleet/inbox            POST {text, from?, kind?, priority?}  push the same item to every agent
@@ -14,7 +15,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -26,6 +27,7 @@ import { ALL_TOOLS, type ToolCtx } from "./tools.ts";
 import type { ShemEngine } from "../shem/engine.ts";
 import type { AgentBus, BusMessage } from "../comms/bus.ts";
 import { fmtPos } from "../util/geom.ts";
+import type { InventoryResult, PlayerEntry } from "../body/results.ts";
 
 export interface HostedAgent {
   rt: AgentRuntime;
@@ -101,7 +103,7 @@ export class GolemHttpHost {
       if (!this.open && !this.fleetAuthed(req, url)) { res.writeHead(401, { "content-type": "text/plain" }); res.end("unauthorized"); return; }
       return this.handleFleet(fm[1]!, req, res);
     }
-    const m = /^\/agents\/([^/]+)(?:\/(mcp|inbox|say|status|events|dash|runs|reflexes|transcript|shot|met))?$/.exec(url.pathname);
+    const m = /^\/agents\/([^/]+)(?:\/(mcp|inbox|say|status|events|dash|runs|reflexes|transcript|shot|met|info))?$/.exec(url.pathname);
     if (!m) { res.writeHead(404, { "content-type": "text/plain" }); res.end("not found"); return; }
     const name = decodeURIComponent(m[1]!);
     const route = m[2] ?? "dash";
@@ -120,6 +122,7 @@ export class GolemHttpHost {
       case "say": return this.handleSay(req, res, hosted);
       case "status": { res.writeHead(200, { "content-type": "text/plain" }); res.end(hosted.drive.stateHeader() + "\n"); return; }
       case "events": return this.handleEvents(req, res, hosted);
+      case "info": return this.json(res, await this.agentInfo(name, hosted));
       case "runs": return this.json(res, (hosted.shem?.runs.list() ?? []).slice(0, 20).map((r) => ({ id: r.id, label: r.label, script: r.script, priority: r.priority, background: r.background, status: r.status, current: r.current, startedAt: r.startedAt, endedAt: r.endedAt })));
       case "reflexes": {
         if (req.method === "POST") {
@@ -218,15 +221,81 @@ export class GolemHttpHost {
 
   private agentRows(): Record<string, unknown>[] {
     return [...this.agents.entries()].map(([name, h]) => {
-      const m = h.rt.mirror;
+      const m = h.rt.mirror; const b = h.rt.agent.body; const st = m.status;
       return {
         name, state: h.drive.stateHeader().split("\n")[0]!.replace(/^\[state\]\s*/, ""),
         dash: `/agents/${encodeURIComponent(name)}/dash${this.open ? "" : `?token=${encodeURIComponent(h.token)}`}`,
-        inWorld: m.inWorld, dead: m.dead, pos: m.inWorld ? fmtPos(m.blockPos) : null, dimension: m.dimension.replace("minecraft:", ""),
+        inWorld: m.inWorld, dead: m.dead, connected: m.connected, pos: m.inWorld ? fmtPos(m.blockPos) : null, dimension: m.dimension.replace("minecraft:", ""),
         phase: m.phase ?? null, weather: m.weather ?? null, hp: m.health, food: m.food, held: m.heldItem.replace("minecraft:", "").replace(/ x(\d+)$/, " ×$1"),
         doing: h.rt.ctx.activity.current ?? null, reflex: h.rt.reflexes.active, goal: h.drive.goal || null, pathing: m.navActive,
+        server: `${b.server.host}:${b.server.port}`, username: b.username, xp: st?.player?.xpLevel ?? null, biome: st?.player?.biome?.replace("minecraft:", "") ?? null,
+        gamemode: st?.player?.gamemode ?? null, busy: h.drive.stats().busy,
       };
     });
+  }
+
+  /** Inventory and player-list reads go to the body; one open tab polling every couple of seconds should not turn into a command per poll. */
+  private readonly invCache = new Map<string, { t: number; inv: InventoryResult | null; players: string[] | null; error?: string }>();
+
+  /**
+   * Everything a person might want to know about one golem, in one JSON: how the body is connected
+   * and to what, where the player is and how it is doing, the world clock, who else is around, the
+   * full inventory by slot, and what the mind is running on. Inventory is a live body command,
+   * cached for 1.5 s; the rest comes from the mirror's 1 Hz status poll and the drive.
+   */
+  private async agentInfo(name: string, h: HostedAgent): Promise<Record<string, unknown>> {
+    const m = h.rt.mirror; const cfg = h.rt.agent; const st = m.status; const pl = st?.player; const now = Date.now();
+    const wt = st?.world?.time; const timeOfDay = typeof wt === "number" ? wt : wt?.timeOfDay ?? pl?.time ?? null;
+    const biome = pl?.biome ?? st?.world?.biome; const light = pl?.light ?? st?.world?.light ?? null;
+    let cached = this.invCache.get(name);
+    if (!cached || now - cached.t > 1500) {
+      cached = { t: now, inv: null, players: null };
+      if (m.connected && m.inWorld) {
+        const [inv, players] = await Promise.allSettled([
+          h.rt.body.call("inventory", {}, { timeoutMs: 3000 }) as Promise<InventoryResult>,
+          h.rt.body.call("players", {}, { timeoutMs: 3000 }) as Promise<PlayerEntry[]>,
+        ]);
+        if (inv.status === "fulfilled") cached.inv = inv.value; else cached.error = (inv.reason as Error).message;
+        // The tab list includes this body; the mirror's join/leave set never does, so drop it here too.
+        if (players.status === "fulfilled") cached.players = players.value.map((p) => p.name).filter((n) => n !== cfg.body.username).sort();
+      } else cached.error = m.connected ? "not in a world" : "body not connected";
+      this.invCache.set(name, cached);
+    }
+    const strip = (id: string | undefined | null) => (id ?? "").replace(/^minecraft:/, "");
+    const mindParts = [cfg.mind.command, ...cfg.mind.args].filter((a) => !a.startsWith("-"));
+    const drive = h.drive.stats();
+    const entities: Record<string, number> = {};
+    for (const e of m.entities.values()) entities[strip(e.type)] = (entities[strip(e.type)] ?? 0) + 1;
+    return {
+      name, t: now,
+      body: {
+        username: cfg.body.username, server: `${cfg.body.server.host}:${cfg.body.server.port}`, reportedServer: st?.server ?? null,
+        control: `${cfg.body.host}:${cfg.body.port}`, attached: !!cfg.body.attach, protocol: h.rt.body.caps.protocol || null,
+        connected: m.connected, inWorld: m.inWorld, dead: m.dead, headless: st?.headless ?? null, singleplayer: st?.singleplayer ?? null,
+        navBackend: st?.navBackend ?? null, screenshotBackend: st?.screenshotBackend ?? null, screen: m.screen,
+        lastTickAgo: m.lastTickAt ? now - m.lastTickAt : null, lastStatusAgo: m.lastStatusAt ? now - m.lastStatusAt : null,
+      },
+      player: {
+        x: m.pos.x, y: m.pos.y, z: m.pos.z, yaw: m.yaw, pitch: m.pitch, dimension: strip(m.dimension), biome: strip(biome) || null,
+        gamemode: pl?.gamemode ?? null, health: m.health, food: m.food, xpLevel: pl?.xpLevel ?? null, xpProgress: pl?.xpProgress ?? null,
+        light, onGround: pl?.onGround ?? null, usingItem: pl?.usingItem ?? null, held: strip(m.heldItem), selectedSlot: m.selectedSlot,
+        pathing: m.navActive, lastDamageAgo: m.lastDamageAt ? now - m.lastDamageAt : null, lastAttacker: m.lastAttacker ? strip(m.lastAttacker.type) : null,
+        maxHealth: pl?.maxHealth ?? 20, absorption: pl?.absorption ?? 0, saturation: pl?.saturation ?? null, armorPoints: pl?.armorPoints ?? null, air: pl?.air ?? null,
+        onFire: pl?.onFire ?? false, inWater: pl?.inWater ?? false, inLava: pl?.inLava ?? false, sleeping: pl?.sleeping ?? false, sneaking: pl?.sneaking ?? false, sprinting: pl?.sprinting ?? false,
+        fallDistance: pl?.fallDistance ?? 0, effects: (pl?.effects ?? []).map((e) => ({ id: strip(e.id), amplifier: e.amplifier, seconds: Math.round(e.ticks / 20) })),
+        armor: (pl?.armor ?? []).map((a) => (a === "empty" ? null : strip(a))),
+      },
+      world: { time: timeOfDay, day: m.day ?? (typeof wt === "object" ? wt?.day : undefined) ?? null, phase: m.phase ?? (typeof wt === "object" ? wt?.phase : undefined) ?? null, weather: m.weather ?? null },
+      players: cached.players ?? [...m.players].sort(), entities,
+      inventory: cached.inv ? { selectedSlot: cached.inv.selectedSlot, items: cached.inv.items.map((i) => ({ slot: i.slot, item: strip(i.item), name: i.name, count: i.count })), free: 36 - cached.inv.items.filter((i) => i.slot <= 35).length, t: cached.t } : null,
+      inventoryError: cached.error ?? null,
+      mind: {
+        adapter: basename(mindParts.at(-1) ?? cfg.mind.command), command: [cfg.mind.command, ...cfg.mind.args].join(" "),
+        ...drive, compactWindow: cfg.mind.compact_window, budget: cfg.mind.budget,
+        profiles: { plan: cfg.mind.models.plan, act: cfg.mind.models.act },
+      },
+      activity: { doing: h.rt.ctx.activity.current ?? null, reflex: h.rt.reflexes.active, goal: h.drive.goal || null, runs: (h.shem?.runs.list() ?? []).filter((r) => r.status === "running").length },
+    };
   }
 
   private handleFleet(route: string, req: IncomingMessage, res: ServerResponse): void {

@@ -20,6 +20,7 @@ public) says which mode is in effect.
 | `POST /agents/<name>/say` | `{text}` | Make the body speak in game chat, no mind involved. |
 | `POST /fleet/inbox` | same as inbox | The same item to every agent. |
 | `GET /agents/<name>/status` | | One-line state (position, health, food, held item, goal). |
+| `GET /agents/<name>/info` | | The whole picture as JSON: `body` (account, server, control socket, protocol, connected/in world), `player` (position, facing, biome, light, xp, armour, effects, condition flags), `world` (clock, day, phase, weather), `players` online, nearby `entities` by type, the full `inventory` by slot (a live body read, cached 1.5 s), and `mind` (adapter, model, session, hourly turn/token budget, context). |
 | `GET /fleet/status` | | Every agent's state line plus dashboard links. |
 | `GET /fleet/shared` | | The shared task board, places and chest index as markdown. |
 | `GET /fleet/bus` | | The last 150 agent-to-agent messages. |
