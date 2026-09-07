@@ -2,116 +2,116 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Golem fleet</title>
+<title>Golem</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/dashboard/style.css">
 <style>
-  :root { --bg:#141518; --panel:#1c1e23; --line:#2a2d34; --fg:#e6e6e6; --dim:#9aa0a8; --acc:#c9a227; --ok:#5fb56a; --bad:#d9534f; --tool:#7fb3ff; --mono: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font: 14px/1.4 system-ui, sans-serif; }
-  header { display:flex; gap:16px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; }
-  header h1 { font-size:16px; margin:0; color:var(--acc); }
-  header .meta { font-family:var(--mono); font-size:12.5px; color:var(--dim); flex:1; }
-  main { display:grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap:12px; padding:12px 16px; height: calc(100vh - 50px); }
-  section { background:var(--panel); border:1px solid var(--line); border-radius:6px; display:flex; flex-direction:column; min-height:0; }
-  section h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:0; padding:8px 12px; border-bottom:1px solid var(--line); display:flex; gap:8px; align-items:center; }
-  section h2 .sp { flex:1; }
-  section h2 a, section h2 button { font-size:11px; color:var(--tool); background:none; border:1px solid var(--line); border-radius:4px; padding:2px 8px; cursor:pointer; text-decoration:none; }
-  #agents { grid-column: 1 / span 2; }
-  .cards { display:flex; gap:12px; padding:10px 12px; flex-wrap:wrap; }
-  .card { flex:1 1 320px; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px 12px; min-width:0; }
-  .card .name { font-weight:600; color:var(--acc); display:flex; align-items:center; gap:8px; }
-  .card .name a { color:var(--tool); font-size:12px; font-weight:400; text-decoration:none; }
-  .card .state { font-family:var(--mono); font-size:12px; color:var(--dim); margin-top:4px; white-space:pre-wrap; word-break:break-word; }
-  .card .last { font-size:12.5px; margin-top:6px; color:var(--fg); white-space:pre-wrap; word-break:break-word; }
-  .card .last .k { color:var(--dim); font-family:var(--mono); font-size:11px; margin-right:6px; }
-  .feed { overflow:auto; padding:8px 12px; font-family:var(--mono); font-size:12.5px; flex:1; }
-  .ev { padding:3px 0; border-bottom:1px dotted var(--line); white-space:pre-wrap; word-break:break-word; }
-  .ev .t { color:var(--dim); margin-right:8px; }
-  .ev .who { color:var(--acc); margin-right:6px; }
-  .ev.bus .who { color:var(--tool); }
-  .ev.say { color:var(--fg); }
-  .ev.turn, .ev.reflex { color:var(--dim); }
-  .ev.death { color:var(--bad); }
-  .tabs { display:flex; gap:4px; }
-  .tabs button.on { background:var(--line); color:var(--fg); }
-  pre.md { margin:0; padding:10px 12px; overflow:auto; flex:1; font-family:var(--mono); font-size:12.5px; white-space:pre-wrap; word-break:break-word; color:var(--fg); }
-  pre.md .h { color:var(--acc); font-weight:600; }
-  pre.md .done { color:var(--dim); text-decoration:line-through; }
+  .wrap { grid-template-rows: auto minmax(0, 1fr); height: calc(100vh - 47px); }
+  .two { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(360px, 1fr); gap: var(--gap); min-height: 0; }
+  #feedwrap { position: relative; }
 </style>
 </head>
 <body>
-<header><h1>Golem fleet</h1><div class="meta" id="meta">connecting…</div></header>
-<main>
-  <section id="agents"><h2>agents <span class="sp"></span><span id="count"></span></h2><div class="cards" id="cards"></div></section>
-  <section><h2>bus + chat <span class="sp"></span><small id="busmeta"></small></h2><div class="feed" id="feed"></div></section>
-  <section><h2><span class="tabs"><button class="on" data-f="tasks">tasks</button><button data-f="places">places</button><button data-f="chests">chests</button></span><span class="sp"></span><button id="reload">reload</button></h2><pre class="md" id="md">…</pre></section>
-</main>
-<script>
-const q = new URLSearchParams(location.search);
-const token = q.get("token") || localStorage.getItem("golem.fleet.token") || "";
-if (q.get("token")) localStorage.setItem("golem.fleet.token", q.get("token"));
-const H = { authorization: `Bearer ${token}` };
-const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-const hhmm = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-const last = {};           // agent -> { say, turn }
-let shared = { tasks: "", places: "", chests: "" };
-let tab = "tasks";
+<header class="top">
+  <div class="brand"><span class="mark"></span>Golem <small id="fleetname"></small></div>
+  <span class="crumb" id="count"></span>
+  <span class="spacer"></span>
+  <span class="live" id="live"><span class="dot"></span><span id="livetxt">connecting</span></span>
+  <span class="clock" id="clock"></span>
+  <button class="btn danger" id="metall" title="Stop every golem: cancel runs, clear movement, stop the minds' turns">met all</button>
+</header>
+<div class="wrap">
+  <div class="cards" id="cards"></div>
+  <div class="two">
+    <section class="panel" id="feedwrap">
+      <div class="hd">Timeline <span class="sp"></span><span class="chips" id="filters">
+        <button class="chip on" data-f="said">chat</button><button class="chip on" data-f="bus">bus</button><button class="chip on" data-f="turn">turns</button><button class="chip on" data-f="reflex">reflexes</button><button class="chip" data-f="tool">tools</button><button class="chip" data-f="inbox">inbox</button>
+      </span></div>
+      <div class="bd scroll feed" id="feed"><div class="empty">waiting for the fleet…</div></div>
+      <button class="btn sm jump hidden" id="jump">↓ latest</button>
+      <div class="hintline">As an owner, <code>goal …</code>, <code>met</code>, <code>status</code> and <code>come</code> are fast paths: no turn, no cost.</div>
+      <form class="composer" id="composer"><select id="target"><option value="*">everyone</option></select><input id="text" placeholder="say something to the golems…" autocomplete="off"><button class="btn primary">send</button></form>
+    </section>
+    <section class="panel">
+      <div class="hd"><span class="tabs" id="tabs"><button class="on" data-f="tasks">tasks</button><button data-f="places">places</button><button data-f="chests">chests</button></span><span class="sp"></span><input class="search" id="search" placeholder="filter…"><button class="btn sm ghost" id="reload">reload</button></div>
+      <div class="bd scroll md" id="md"><div class="empty">…</div></div>
+    </section>
+  </div>
+</div>
+<script type="module">
+import { auth, api, stream, toast, md, pinned, esc, hhmm, short, hpClass, phaseTag } from "/dashboard/common.js";
+const A = await auth(); const X = api(A);
+document.getElementById("fleetname").textContent = A.cfg.fleet && A.cfg.fleet !== "golem" ? A.cfg.fleet : "";
+const feed = document.getElementById("feed"); const pin = pinned(feed, document.getElementById("jump"));
+const last = {}; let shared = { tasks: "", places: "", chests: "" }; let tab = "tasks"; let rows = [];
+const filters = new Set(["said", "bus", "turn", "reflex"]);
+setInterval(() => document.getElementById("clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), 1000);
 
-async function get(path) { const r = await fetch(path, { headers: H }); if (!r.ok) throw new Error(`${path}: ${r.status}`); return r.json(); }
-function renderCards(agents) {
-  document.getElementById("count").textContent = `${agents.length}`;
-  const el = document.getElementById("cards");
-  el.innerHTML = agents.map((a) => {
-    const l = last[a.name] || {};
-    return `<div class="card"><div class="name">${esc(a.name)} <a href="${a.dash}" target="_blank">open ↗</a></div><div class="state">${esc(a.state)}</div>` +
-      (l.say ? `<div class="last"><span class="k">said</span>${esc(l.say)}</div>` : "") +
-      (l.turn ? `<div class="last"><span class="k">turn</span>${esc(l.turn)}</div>` : "") + `</div>`;
-  }).join("");
+function card(a) {
+  const l = last[a.name] || {};
+  const hp = Number(a.hp ?? 0), food = Number(a.food ?? 0);
+  return `<div class="card ${a.dead ? "dead" : ""}" data-agent="${esc(a.name)}">
+    <div class="name"><b>${esc(a.name)}</b><span class="where">${a.inWorld ? esc(a.pos) + " · " + esc(a.dimension) : "not in world"}</span><span class="sp"></span>
+      ${a.dead ? '<span class="tag dead">dead</span>' : ""}${a.reflex ? `<span class="tag reflex">${esc(a.reflex)}</span>` : ""}${phaseTag(a.phase, a.weather)}</div>
+    <div class="bars"><span class="k">health</span><span class="bar hp ${hpClass(hp)}"><i style="width:${Math.max(0, Math.min(100, hp / 20 * 100))}%"></i></span><span class="v">${hp.toFixed(0)}/20</span>
+      <span class="k">food</span><span class="bar food"><i style="width:${Math.max(0, Math.min(100, food / 20 * 100))}%"></i></span><span class="v">${food}/20</span></div>
+    <div class="kv"><span class="k">holding</span><span class="v">${esc(a.held || "nothing")}</span>
+      <span class="k">doing</span><span class="v">${esc(a.doing || (a.pathing ? "walking" : "idle"))}</span>
+      ${l.turn ? `<span class="k">last turn</span><span class="v">${esc(l.turn)}</span>` : ""}</div>
+    ${l.say ? `<div class="said"><span class="t">${hhmm(l.sayT)}</span>${esc(l.say)}</div>` : ""}
+    ${a.goal ? `<details><summary class="goal"><b>goal</b> ${esc(short(a.goal, 90))}</summary><div class="goal">${esc(a.goal)}</div></details>` : `<div class="goal faint">no goal</div>`}
+    <div class="foot"><a class="btn sm" href="${a.dash}">open ${esc(a.name)} ↗</a><span class="sp"></span><button class="btn sm danger" data-met="${esc(a.name)}">met</button></div>
+  </div>`;
 }
-function add(cls, who, html, t = Date.now()) {
-  const feed = document.getElementById("feed");
-  const atBottom = feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 30;
-  const d = document.createElement("div"); d.className = "ev " + cls;
-  d.innerHTML = `<span class="t">${hhmm(t)}</span><span class="who">${esc(who)}</span>${html}`;
-  feed.appendChild(d);
-  while (feed.children.length > 400) feed.removeChild(feed.firstChild);
-  if (atBottom) feed.scrollTop = feed.scrollHeight;
+function render(agents) {
+  rows = agents;
+  document.getElementById("cards").innerHTML = agents.map(card).join("") || `<div class="empty">no agents registered</div>`;
+  document.getElementById("count").textContent = `${agents.length} golem${agents.length === 1 ? "" : "s"}`;
+  const sel = document.getElementById("target"); const cur = sel.value;
+  sel.innerHTML = `<option value="*">everyone</option>` + agents.map((a) => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join("");
+  if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
+  document.querySelectorAll("[data-met]").forEach((b) => b.onclick = async () => { await X.post(`/agents/${encodeURIComponent(b.dataset.met)}/met`); toast(`${b.dataset.met}: met`); });
 }
-function renderMd() {
-  const text = shared[tab] || "(empty)";
-  document.getElementById("md").innerHTML = text.split("\n").map((l) =>
-    /^#/.test(l) ? `<span class="h">${esc(l)}</span>` : /^- \[x\]/i.test(l) ? `<span class="done">${esc(l)}</span>` : esc(l)).join("\n");
+function add(cls, who, html, t = Date.now(), pill = cls) {
+  if (feed.firstElementChild?.classList.contains("empty")) feed.innerHTML = "";
+  const d = document.createElement("div"); d.className = `row ${cls}`; d.dataset.f = cls === "dm" ? "bus" : cls === "death" ? "reflex" : cls;
+  d.classList.toggle("hidden", !filters.has(d.dataset.f));
+  d.innerHTML = `<span class="t">${hhmm(t)}</span><span class="who">${esc(who)}</span><span class="txt"><span class="pill">${esc(pill)}</span>${html}</span>`;
+  feed.appendChild(d); while (feed.children.length > 500) feed.removeChild(feed.firstChild); pin.after();
 }
-async function loadShared() { try { shared = await get("/fleet/shared"); renderMd(); } catch (e) { document.getElementById("md").textContent = "shared files unavailable: " + e.message; } }
-async function loadBus() {
-  try { for (const m of await get("/fleet/bus")) add("bus", `${m.from} → ${m.to}`, esc(m.text), m.t); document.getElementById("busmeta").textContent = "live"; }
-  catch (e) { document.getElementById("busmeta").textContent = "no bus"; }
-}
-function onEvent(type, d) {
-  const who = d.agent || "";
-  switch (type) {
-    case "hello": case "state": renderCards(d.agents); document.getElementById("meta").textContent = `${d.agents.length} agents · ${hhmm(d.t)}`; break;
-    case "bus": add("bus", `${d.from} → ${d.to}`, esc(d.text), d.t); break;
-    case "golem_tool": if (d.name === "say" && d.args && d.args.text) { last[who] = { ...(last[who] || {}), say: d.args.text }; add("say", who, esc(d.args.text), d.t); } break;
-    case "turn_end": last[who] = { ...(last[who] || {}), turn: `${d.stopReason} · ${(d.ms / 1000).toFixed(0)}s · ${d.toolCalls ?? 0} calls${d.model ? " · " + d.model : ""}` }; add("turn", who, `turn ${esc(d.stopReason)} · ${(d.ms / 1000).toFixed(0)}s · ${d.toolCalls ?? 0} calls`, d.t); break;
-    case "reflex": add("reflex", who, `reflex ${esc(d.name)}${d.note ? ": " + esc(d.note) : ""}`, d.t); break;
-    case "death": add("death", who, "died", d.t); break;
-    default: break;
-  }
-}
-function connect() {
-  const es = new EventSource(`/fleet/events?token=${encodeURIComponent(token)}`);
-  for (const t of ["hello", "state", "bus", "golem_tool", "turn_end", "reflex", "death", "prompt"]) es.addEventListener(t, (e) => { try { onEvent(t, JSON.parse(e.data)); } catch {} });
-  es.onerror = () => { document.getElementById("meta").textContent = "disconnected; retrying…"; };
-}
-document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => { document.querySelectorAll(".tabs button").forEach((x) => x.classList.remove("on")); b.classList.add("on"); tab = b.dataset.f; renderMd(); }));
-document.getElementById("reload").addEventListener("click", loadShared);
-(async () => {
-  if (!token) { document.body.innerHTML = "<p style='padding:2em'>Open /dash?token=… (any agent's mcp token from data/&lt;name&gt;/tokens.json).</p>"; return; }
-  try { renderCards((await get("/fleet/status")).agents); } catch (e) { document.getElementById("meta").textContent = "unauthorized or offline: " + e.message; return; }
-  await loadBus(); await loadShared(); connect();
-  setInterval(loadShared, 30000);
-})();
+const H = {
+  hello: (d) => render(d.agents),
+  state: (d) => render(d.agents),
+  bus: (d) => add("bus", `${d.from} → ${d.to}`, esc(d.text), d.t),
+  said: (d) => { last[d.agent] = { ...(last[d.agent] || {}), say: d.text, sayT: d.t }; add("said", d.agent, esc(d.text), d.t, "said"); render(rows); },
+  dm: (d) => {},
+  turn_end: (d) => { last[d.agent] = { ...(last[d.agent] || {}), turn: `${d.stopReason} · ${Math.round(d.ms / 1000)}s · ${d.toolCalls ?? 0} calls${d.model ? " · " + short(d.model, 26) : ""}` }; add("turn", d.agent, `turn ${esc(d.stopReason)} · ${Math.round(d.ms / 1000)}s · ${d.toolCalls ?? 0} calls${d.model ? " · " + esc(d.model) : ""}`, d.t); },
+  reflex: (d) => add("reflex", d.agent, `${esc(d.name)}${d.note ? ": " + esc(d.note) : ""}`, d.t),
+  golem_tool: (d) => { if (d.name === "say" || d.name === "dm") return; add(`tool${d.isError ? " err" : ""}`, d.agent, `${esc(d.name)}(${esc(short(JSON.stringify(d.args), 80))}) → ${esc(short(String(d.result).split("\n")[0], 100))}`, d.t, "tool"); },
+  inbox: (d) => { const it = d.item || d; if (!it.kind || it.kind === "goal_tick") return; add("inbox", d.agent, `${esc(it.kind)}${it.from ? " · " + esc(it.from) : ""}: ${esc(short(it.text, 160))}`, d.t); },
+};
+document.querySelectorAll("#filters .chip").forEach((c) => c.onclick = () => { c.classList.toggle("on"); const f = c.dataset.f; c.classList.contains("on") ? filters.add(f) : filters.delete(f); feed.querySelectorAll(".row").forEach((r) => r.classList.toggle("hidden", !filters.has(r.dataset.f))); pin.after(); });
+document.querySelectorAll("#tabs button").forEach((b) => b.onclick = () => { document.querySelectorAll("#tabs button").forEach((x) => x.classList.remove("on")); b.classList.add("on"); tab = b.dataset.f; renderMd(); });
+document.getElementById("search").oninput = renderMd;
+document.getElementById("reload").onclick = loadShared;
+function renderMd() { document.getElementById("md").innerHTML = md(shared[tab], document.getElementById("search").value.trim()); }
+async function loadShared() { try { shared = await X.get("/fleet/shared"); renderMd(); } catch (e) { document.getElementById("md").innerHTML = `<div class="empty">${esc(e.message)}</div>`; } }
+document.getElementById("composer").onsubmit = async (e) => {
+  e.preventDefault(); const el = document.getElementById("text"); const text = el.value.trim(); if (!text) return; el.value = "";
+  const to = document.getElementById("target").value;
+  const r = to === "*" ? await X.post("/fleet/inbox", { text }) : await X.post(`/agents/${encodeURIComponent(to)}/inbox`, { text });
+  const fast = r.id === -1 || (r.ids && Object.values(r.ids).every((i) => i === -1));
+  toast(fast ? `fast path: ${short(text, 40)}` : `sent to ${to === "*" ? "everyone" : to}`);
+  add("inbox", "you", `→ ${esc(to === "*" ? "everyone" : to)}: ${esc(text)}`, Date.now(), "you");
+};
+document.getElementById("metall").onclick = async () => { for (const a of rows) await X.post(`/agents/${encodeURIComponent(a.name)}/met`); toast("met: everyone stopped"); };
+try {
+  const s = await X.get("/fleet/status"); render(s.agents);
+  for (const m of await X.get("/fleet/bus")) add("bus", `${m.from} → ${m.to}`, esc(m.text), m.t);
+  await loadShared();
+} catch (e) { document.getElementById("cards").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+stream(A.withToken("/fleet/events"), H, (st) => { const el = document.getElementById("live"); el.className = `live ${st}`; document.getElementById("livetxt").textContent = st === "on" ? "live" : "reconnecting…"; });
+setInterval(loadShared, 30000);
 </script>
 </body>
 </html>

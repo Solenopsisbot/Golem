@@ -4,166 +4,121 @@
 <meta charset="utf-8">
 <title>Golem</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/dashboard/style.css">
 <style>
-  :root { --bg:#141518; --panel:#1c1e23; --line:#2a2d34; --fg:#e6e6e6; --dim:#9aa0a8; --acc:#c9a227; --ok:#5fb56a; --bad:#d9534f; --tool:#7fb3ff; --mono: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font: 14px/1.4 system-ui, sans-serif; }
-  header { display:flex; gap:16px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; z-index:2; }
-  header h1 { font-size:16px; margin:0; color:var(--acc); }
-  header .state { font-family:var(--mono); font-size:12.5px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
-  header button { background:var(--bad); color:#fff; border:0; padding:6px 12px; border-radius:4px; font-weight:600; cursor:pointer; }
-  main { display:grid; grid-template-columns: minmax(0, 1fr) 380px; gap:12px; padding:12px 16px; height: calc(100vh - 50px); }
-  section { background:var(--panel); border:1px solid var(--line); border-radius:6px; display:flex; flex-direction:column; min-height:0; }
-  section h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:0; padding:8px 12px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
-  section h2 small { text-transform:none; letter-spacing:0; }
-  #log { overflow:auto; padding:8px 12px; font-family:var(--mono); font-size:12.5px; flex:1; }
-  .ev { padding:3px 0; border-bottom:1px dotted var(--line); white-space:pre-wrap; word-break:break-word; }
-  .ev .t { color:var(--dim); margin-right:8px; }
-  .ev.prompt { color:var(--acc); }
-  .ev.agent { color:var(--fg); }
-  .ev.tool { color:var(--tool); }
-  .ev.tool.err { color:var(--bad); }
-  .ev.turn { color:var(--ok); }
-  .ev.inbox { color:#d7a3ff; }
-  .ev.sys { color:var(--dim); }
-  .ev details summary { cursor:pointer; }
-  aside { display:flex; flex-direction:column; gap:12px; min-height:0; overflow:auto; }
-  .list { padding:8px 12px; font-family:var(--mono); font-size:12px; overflow:auto; }
-  .list div { padding:2px 0; }
-  .list label { display:flex; gap:8px; align-items:center; cursor:pointer; }
-  form.chat { display:flex; gap:8px; padding:8px 12px; border-top:1px solid var(--line); }
-  form.chat input { flex:1; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:4px; padding:6px 8px; font: inherit; }
-  form.chat button { background:var(--acc); color:#111; border:0; border-radius:4px; padding:6px 12px; font-weight:600; cursor:pointer; }
-  img#shot { width:100%; display:block; background:#000; }
-  .muted { color:var(--dim); }
-  a { color:var(--tool); }
-  .status-ok { color:var(--ok); } .status-failed, .status-cancelled, .status-preempted, .status-timeout { color:var(--bad); } .status-running { color:var(--acc); }
+  .wrap { grid-template-columns: minmax(0, 1fr) 380px; height: calc(100vh - 47px); }
+  .wrap.two { grid-template-rows: minmax(0, 1fr); }
+  aside { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; overflow: auto; }
+  aside .panel { flex: 0 0 auto; max-height: 34vh; }
+  aside .panel.grow { flex: 1 1 auto; }
+  #feedwrap { position: relative; }
+  .statebar { display: flex; gap: 14px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--muted); flex-wrap: wrap; }
+  .statebar .bars { grid-template-columns: 40px 110px 40px; gap: 4px 8px; }
+  .statebar .kv b { color: var(--fg); font-weight: 600; }
 </style>
 </head>
 <body>
-<header>
-  <h1 id="title">Golem</h1>
-  <div class="state" id="state">connecting…</div>
-  <span class="muted" id="usage"></span>
-  <button id="met" title="Stop everything">met</button>
+<header class="top">
+  <div class="brand"><span class="mark"></span><a href="/" style="color:inherit">Golem</a><small id="fleetname"></small></div>
+  <span class="crumb">/ <b id="title" style="color:var(--fg)"></b></span>
+  <span class="spacer"></span>
+  <span class="meter" id="ctx" title="context in the mind's window"></span>
+  <span class="live" id="live"><span class="dot"></span><span id="livetxt">connecting</span></span>
+  <button class="btn danger" id="met" title="Stop everything: cancel runs, clear movement, stop the mind's turn">met</button>
 </header>
-<main>
-  <section>
-    <h2>Transcript <small class="muted" id="conn">…</small></h2>
-    <div id="log"></div>
-    <form class="chat" id="chat"><input id="text" placeholder="say something to the agent as its owner… (goal …, met, mode x off are fast paths)" autocomplete="off"><button>send</button></form>
+<div class="wrap two">
+  <section class="panel" id="feedwrap">
+    <div class="statebar" id="statebar">connecting…</div>
+    <div class="hd">Transcript <span class="sp"></span><span class="chips" id="filters">
+      <button class="chip on" data-f="prompt">prompts</button><button class="chip on" data-f="agent">agent</button><button class="chip on" data-f="tool">tools</button><button class="chip on" data-f="said">chat</button><button class="chip" data-f="thought">thoughts</button><button class="chip on" data-f="turn">turns</button><button class="chip on" data-f="inbox">inbox</button><button class="chip on" data-f="reflex">reflexes</button>
+    </span></div>
+    <div class="bd scroll feed" id="feed"><div class="empty">loading transcript…</div></div>
+    <button class="btn sm jump hidden" id="jump">↓ latest</button>
+    <div class="hintline">You speak as the owner. <code>goal …</code>, <code>met</code>, <code>status</code>, <code>come</code>, <code>mode &lt;reflex&gt; off</code> are fast paths.</div>
+    <form class="composer" id="composer"><input id="text" placeholder="say something…" autocomplete="off"><button class="btn primary">send</button></form>
   </section>
   <aside>
-    <section><h2>Picture <small><a href="#" id="fresh">take a new one</a></small></h2><img id="shot" alt="no screenshot yet"></section>
-    <section><h2>Runs</h2><div class="list" id="runs">…</div></section>
-    <section><h2>Reflexes</h2><div class="list" id="reflexes">…</div></section>
-    <section><h2>Inbox <small class="muted" id="inboxn"></small></h2><div class="list" id="inbox"></div></section>
+    <section class="panel"><div class="hd">Picture <span class="sp"></span><button class="btn sm ghost" id="fresh">take a new one</button></div><img class="shot" id="shot" alt=""></section>
+    <section class="panel"><div class="hd">Reflexes <span class="sp"></span><span class="n" id="reflexn"></span></div><div class="bd scroll" id="reflexes"></div></section>
+    <section class="panel"><div class="hd">Runs <span class="sp"></span><span class="n" id="runsn"></span></div><div class="bd scroll list" id="runs"></div></section>
+    <section class="panel grow"><div class="hd">Inbox <span class="sp"></span><span class="n" id="inboxn"></span></div><div class="bd scroll list" id="inbox"></div></section>
   </aside>
-</main>
-<script>
-const q = new URLSearchParams(location.search);
-const agent = q.get("agent") || location.pathname.split("/")[2] || "";
-const token = q.get("token") || localStorage.getItem("golem.token." + agent) || "";
-if (q.get("token")) localStorage.setItem("golem.token." + agent, q.get("token"));
-const base = `/agents/${encodeURIComponent(agent)}`;
-const H = { authorization: `Bearer ${token}`, "content-type": "application/json" };
-document.getElementById("title").textContent = `Golem · ${agent}`;
-const log = document.getElementById("log");
-const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-const ts = (t) => new Date(t).toTimeString().slice(0, 8);
+</div>
+<script type="module">
+import { auth, api, stream, toast, pinned, esc, hhmm, short, hpClass, phaseTag } from "/dashboard/common.js";
+const agent = decodeURIComponent(location.pathname.split("/")[2] || "");
+const A = await auth(); const X = api(A); const base = `/agents/${encodeURIComponent(agent)}`;
+document.getElementById("title").textContent = agent; document.title = `Golem · ${agent}`;
+document.getElementById("fleetname").textContent = A.cfg.fleet && A.cfg.fleet !== "golem" ? A.cfg.fleet : "";
+const feed = document.getElementById("feed"); const pin = pinned(feed, document.getElementById("jump"));
+const filters = new Set(["prompt", "agent", "tool", "said", "turn", "inbox", "reflex"]);
 let agentBuf = null;
-function add(cls, html, t = Date.now()) {
-  const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 40;
-  const d = document.createElement("div");
-  d.className = "ev " + cls;
-  d.innerHTML = `<span class="t">${ts(t)}</span>${html}`;
-  log.appendChild(d);
-  while (log.children.length > 600) log.removeChild(log.firstChild);
-  if (stick) log.scrollTop = log.scrollHeight;
-  return d;
+function add(cls, html, t = Date.now(), pill = cls) {
+  if (feed.firstElementChild?.classList.contains("empty")) feed.innerHTML = "";
+  const d = document.createElement("div"); d.className = `row ${cls}`; d.dataset.f = cls.split(" ")[0] === "sys" ? "turn" : cls.split(" ")[0];
+  d.classList.toggle("hidden", !filters.has(d.dataset.f));
+  d.innerHTML = `<span class="t">${hhmm(t)}</span><span class="who">${esc(pill)}</span><span class="txt">${html}</span>`;
+  feed.appendChild(d); while (feed.children.length > 800) feed.removeChild(feed.firstChild); pin.after(); return d;
 }
-function flushAgent() { agentBuf = null; }
-function onEvent(type, d) {
-  switch (type) {
-    case "prompt": flushAgent(); add("prompt", `<details><summary>prompt (${esc(d.text.split("\n")[0].slice(0, 120))})</summary>${esc(d.text)}</details>`, d.t); break;
-    case "agent_text": {
-      if (!agentBuf) { agentBuf = add("agent", "", d.t); agentBuf.dataset.text = ""; }
-      agentBuf.dataset.text += d.text;
-      agentBuf.innerHTML = `<span class="t">${ts(d.t)}</span>${esc(agentBuf.dataset.text)}`;
-      break;
-    }
-    case "golem_tool": flushAgent(); add("tool" + (d.isError ? " err" : ""), `<details><summary>${esc(d.name)}(${esc(JSON.stringify(d.args)).slice(0, 160)}) → ${esc(String(d.result).split("\n")[0].slice(0, 140))} <span class="muted">${d.ms}ms</span></summary>${esc(d.result)}</details>`, d.t); break;
-    case "turn_end": flushAgent(); add("turn", `turn ${esc(d.stopReason)} · ${(d.ms / 1000).toFixed(1)}s${d.tokens ? ` · ${d.tokens} tokens` : ""}${d.model ? ` · ${esc(d.model)}` : ""}`, d.t); break;
-    case "inbox": { const it = d.item || {}; add("inbox", `inbox ${esc(it.kind)}${it.from ? " " + esc(it.from) : ""}: ${esc(it.text)}`, d.t); refreshInbox(); break; }
-    case "usage": document.getElementById("usage").textContent = `context ${Math.round(d.used / 1000)}k / ${Math.round(d.size / 1000)}k`; break;
-    case "hello": setState(d.state); break;
-    case "reflex": add("sys", `reflex ${esc(d.name)}: ${esc(d.note)}`, d.t); break;
-    default: break;
-  }
+const flush = () => { agentBuf = null; };
+function toolRow(d) {
+  const first = String(d.result ?? "").split("\n")[0];
+  return `<details><summary>${esc(d.name)}(${esc(short(JSON.stringify(d.args ?? {}), 110))}) → ${esc(short(first, 120))}${d.ms ? ` <span class="faint">${(d.ms / 1000).toFixed(1)}s</span>` : ""}</summary><div>${esc(d.result)}</div></details>`;
 }
-function setState(s) { document.getElementById("state").textContent = s.replace(/^\[state\]\s*/, ""); }
-async function get(path) { const r = await fetch(base + path, { headers: H }); if (!r.ok) throw new Error(`${path}: ${r.status}`); return r; }
-async function post(path, body) { const r = await fetch(base + path, { method: "POST", headers: H, body: JSON.stringify(body || {}) }); return r.json().catch(() => ({})); }
-async function refreshStatus() { try { setState(await (await get("/status")).text()); } catch (e) { setState("offline: " + e.message); } }
-async function refreshRuns() {
-  try {
-    const rs = await (await get("/runs")).json();
-    document.getElementById("runs").innerHTML = rs.length ? rs.map((r) => `<div><span class="status-${r.status}">${esc(r.status)}</span> ${esc(r.id)} ${esc(r.label)} p${r.priority}${r.background ? " bg" : ""}${r.current ? ` <span class="muted">in ${esc(r.current)}</span>` : ""}</div>`).join("") : "<span class=muted>no runs</span>";
-  } catch {}
-}
-async function refreshReflexes() {
-  try {
-    const rs = await (await get("/reflexes")).json();
-    document.getElementById("reflexes").innerHTML = rs.map((r) => `<div><label><input type="checkbox" data-name="${esc(r.name)}" ${r.on ? "checked" : ""}> ${esc(r.name)} <span class="muted">p${r.priority}${r.active ? " · acting" : ""}</span></label></div>`).join("");
-    document.querySelectorAll("#reflexes input").forEach((el) => el.onchange = () => post("/reflexes", { name: el.dataset.name, on: el.checked }));
-  } catch {}
-}
-async function refreshInbox() {
-  try {
-    const it = await (await get("/inbox")).json();
-    document.getElementById("inboxn").textContent = it.length ? `${it.length} unread` : "";
-    document.getElementById("inbox").innerHTML = it.length ? it.map((i) => `<div>${esc(i.kind)} p${i.priority}${i.from ? " " + esc(i.from) : ""}: ${esc(i.text)}</div>`).join("") : "<span class=muted>empty</span>";
-  } catch {}
-}
-function refreshShot(fresh) { document.getElementById("shot").src = `${base}/shot?token=${encodeURIComponent(token)}${fresh ? "&fresh=1" : ""}&t=${Date.now()}`; }
-document.getElementById("fresh").onclick = (e) => { e.preventDefault(); refreshShot(true); };
-document.getElementById("met").onclick = () => post("/met");
-document.getElementById("chat").onsubmit = async (e) => {
-  e.preventDefault();
-  const el = document.getElementById("text"); const text = el.value.trim(); if (!text) return;
-  el.value = "";
-  add("inbox", `you: ${esc(text)}`);
-  await post("/inbox", { text, kind: "chat" });
+const H = {
+  hello: (d) => setState(d.state),
+  prompt: (d) => { flush(); const first = d.text.split("\n")[0]; add("prompt", `<details><summary>${esc(short(first.replace(/^\[state\]\s*/, ""), 140))}${d.queued ? ' <span class="faint">(queued into the running turn)</span>' : ""}</summary><div>${esc(d.text)}</div></details>`, d.t, d.planning ? "plan" : "prompt"); },
+  agent_text: (d) => { if (!agentBuf) { agentBuf = add("agent", "", d.t, agent); agentBuf.dataset.text = ""; } agentBuf.dataset.text += d.text; agentBuf.querySelector(".txt").textContent = agentBuf.dataset.text; pin.after(); },
+  golem_tool: (d) => { flush(); if (d.name === "say") return; add(`tool${d.isError ? " err" : ""}`, toolRow(d), d.t, "tool"); },
+  said: (d) => { flush(); add("said", esc(d.text), d.t, "said"); },
+  turn_end: (d) => { flush(); add("turn", `turn ${esc(d.stopReason)} · ${(d.ms / 1000).toFixed(1)}s · ${d.toolCalls ?? 0} calls${d.tokens ? ` · ${Math.round(d.tokens / 1000)}k tokens` : ""}${d.model ? ` · ${esc(d.model)}` : ""}`, d.t); },
+  inbox: (d) => { const it = d.item || d; if (it.kind === "goal_tick") return; add("inbox", `${esc(it.kind)}${it.from ? " · " + esc(it.from) : ""}: ${esc(short(it.text, 220))}`, d.t); refreshInbox(); },
+  usage: (d) => { const pct = d.size ? Math.min(100, d.used / d.size * 100) : 0; document.getElementById("ctx").innerHTML = `<span class="bar ${pct > 75 ? "hot" : ""}"><i style="width:${pct}%"></i></span>${Math.round(d.used / 1000)}k / ${Math.round(d.size / 1000)}k`; },
+  reflex: (d) => add("reflex", `${esc(d.name)}${d.note ? ": " + esc(d.note) : ""}`, d.t),
 };
+function setState(s) {
+  const st = String(s || "").replace(/^\[state\]\s*/, "");
+  const hp = Number(/hp (\d+)/.exec(st)?.[1] ?? 0), food = Number(/food (\d+)/.exec(st)?.[1] ?? 0);
+  const pos = /\((-?\d+), (-?\d+), (-?\d+)\) (\w+)/.exec(st); const phase = /\| (day|night|dawn|dusk|noon|midnight)[^|]*/.exec(st)?.[0]?.replace("| ", "");
+  const held = /held ([^|]+)/.exec(st)?.[1]?.trim(); const doing = /doing: ([^|]+)/.exec(st)?.[1]?.trim(); const goal = /goal: (.*)$/.exec(st)?.[1]?.trim(); const dead = /DEAD/.test(st); const reflex = /reflex (\S+) acting/.exec(st)?.[1];
+  document.getElementById("statebar").innerHTML = `
+    <span class="mono">${pos ? `${pos[1]}, ${pos[2]}, ${pos[3]} · ${esc(pos[4])}` : esc(st.split("|")[1] || "")}</span>
+    <span class="bars"><span class="k">hp</span><span class="bar hp ${hpClass(hp)}"><i style="width:${hp / 20 * 100}%"></i></span><span class="v">${hp}</span><span class="k">food</span><span class="bar food"><i style="width:${food / 20 * 100}%"></i></span><span class="v">${food}</span></span>
+    ${dead ? '<span class="tag dead">dead</span>' : ""}${reflex ? `<span class="tag reflex">${esc(reflex)}</span>` : ""}${phaseTag(phase, null)}
+    <span class="kv">holding <b>${esc(held || "nothing")}</b></span>${doing ? `<span class="kv">doing <b>${esc(doing)}</b></span>` : ""}
+    ${goal ? `<span class="kv" title="${esc(goal)}">goal <b>${esc(short(goal, 70))}</b></span>` : '<span class="faint">no goal</span>'}`;
+}
+async function refreshStatus() { try { setState(await X.get(`${base}/status`)); } catch (e) { document.getElementById("statebar").textContent = "offline: " + e.message; } }
+async function refreshRuns() { try { const rs = await X.get(`${base}/runs`); document.getElementById("runsn").textContent = rs.filter((r) => r.status === "running").length ? `${rs.filter((r) => r.status === "running").length} running` : ""; document.getElementById("runs").innerHTML = rs.length ? rs.map((r) => `<div class="item"><span class="st ${esc(r.status)}">${esc(r.status)}</span><span class="lb" title="${esc(r.label)}">${esc(r.label)}${r.background ? ' <span class="faint">bg</span>' : ""}${r.current && r.status === "running" ? ` <span class="faint">· ${esc(r.current)}</span>` : ""}</span><span class="t">${hhmm(r.startedAt)}</span></div>`).join("") : `<div class="empty">no runs yet</div>`; } catch {} }
+async function refreshReflexes() { try { const rs = await X.get(`${base}/reflexes`); document.getElementById("reflexn").textContent = `${rs.filter((r) => r.on).length}/${rs.length} on`; document.getElementById("reflexes").innerHTML = rs.map((r) => `<div class="toggle ${r.on ? "on" : ""} ${r.active ? "active" : ""}" data-name="${esc(r.name)}"><span class="sw"></span><span class="nm">${esc(r.name)}<small>${esc(r.description)}</small></span><span class="p">p${r.priority}</span></div>`).join(""); document.querySelectorAll("#reflexes .toggle").forEach((el) => el.querySelector(".sw").onclick = async () => { const on = !el.classList.contains("on"); await X.post(`${base}/reflexes`, { name: el.dataset.name, on }); el.classList.toggle("on", on); toast(`${el.dataset.name} ${on ? "on" : "off"}`); }); } catch {} }
+async function refreshInbox() { try { const it = await X.get(`${base}/inbox`); document.getElementById("inboxn").textContent = it.length ? `${it.length} waiting` : ""; document.getElementById("inbox").innerHTML = it.length ? it.map((i) => `<div class="item"><span class="st queued">${esc(i.kind)}</span><span class="lb" title="${esc(i.text)}">${i.from ? `<b>${esc(i.from)}</b>: ` : ""}${esc(i.text)}</span><span class="t">p${i.priority}</span></div>`).join("") : `<div class="empty">nothing waiting: the mind is caught up</div>`; } catch {} }
+function refreshShot(fresh) { const img = document.getElementById("shot"); img.src = A.withToken(`${base}/shot${fresh ? "?fresh=1" : ""}`) + (fresh ? "&" : "?") + "t=" + Date.now(); }
+document.getElementById("fresh").onclick = () => refreshShot(true);
+document.getElementById("met").onclick = async () => { await X.post(`${base}/met`); toast(`${agent}: met`); };
+document.getElementById("composer").onsubmit = async (e) => { e.preventDefault(); const el = document.getElementById("text"); const text = el.value.trim(); if (!text) return; el.value = ""; const r = await X.post(`${base}/inbox`, { text, kind: "chat" }); add("inbox", esc(text), Date.now(), "you"); if (r.id === -1) toast(`fast path: ${short(text, 40)}`); };
+document.querySelectorAll("#filters .chip").forEach((c) => c.onclick = () => { c.classList.toggle("on"); const f = c.dataset.f; c.classList.contains("on") ? filters.add(f) : filters.delete(f); feed.querySelectorAll(".row").forEach((r) => r.classList.toggle("hidden", !filters.has(r.dataset.f))); pin.after(); });
 async function loadTranscript() {
   try {
-    const lines = await (await get("/transcript?limit=150")).json();
+    const lines = await X.get(`${base}/transcript?limit=200`);
     for (const l of lines) {
-      if (l.role === "user") onEvent("prompt", { text: l.text, t: l.t });
-      else if (l.role === "agent") { add("agent", esc(l.text), l.t); }
-      else if (l.role === "tool") { const m = /^([a-z_]+)\((.*?)\) -> ([\s\S]*)$/.exec(l.text); if (m) onEvent("golem_tool", { name: m[1], args: safeJson(m[2]), result: m[3], ms: l.ms || 0, isError: l.isError, t: l.t }); else add("tool", esc(l.text), l.t); }
-      else add("sys", esc(l.text), l.t);
+      if (l.role === "user") H.prompt({ text: l.text, t: l.t, planning: l.planning });
+      else if (l.role === "agent") { if (l.text) add("agent", esc(l.text), l.t, agent); if (l.stopReason) H.turn_end({ stopReason: l.stopReason, ms: l.ms || 0, toolCalls: l.toolCalls, tokens: l.tokens, model: l.model, t: l.t }); }
+      else if (l.role === "tool") { const m = /^([a-z_]+)\((.*?)\) -> ([\s\S]*)$/.exec(l.text); if (m) { if (m[1] === "say") add("said", esc(String(m[3]).replace(/^said: /, "")), l.t, "said"); else add(`tool${l.isError ? " err" : ""}`, toolRow({ name: m[1], args: safe(m[2]), result: m[3], ms: l.ms }), l.t, "tool"); } }
+      else if (l.role === "thought") add("thought", esc(l.text), l.t, "thought");
+      else add("sys", esc(l.text), l.t, "event");
     }
-    add("sys", "— live —");
+    add("sys", "— live —", Date.now(), "");
   } catch (e) { add("sys", "transcript: " + esc(e.message)); }
+  feed.scrollTop = feed.scrollHeight;
 }
-function safeJson(s) { try { return JSON.parse(s); } catch { return s; } }
-function connect() {
-  const es = new EventSource(`${base}/events?token=${encodeURIComponent(token)}`);
-  document.getElementById("conn").textContent = "connecting";
-  es.onopen = () => { document.getElementById("conn").textContent = "live"; };
-  es.onerror = () => { document.getElementById("conn").textContent = "reconnecting…"; };
-  for (const type of ["hello", "prompt", "agent_text", "golem_tool", "turn_end", "inbox", "usage", "reflex", "tool_call"]) {
-    es.addEventListener(type, (e) => { try { onEvent(type, JSON.parse(e.data)); } catch {} });
-  }
-}
-(async () => {
-  if (!agent) { document.body.innerHTML = "<p style='padding:2em'>Open /agents/&lt;name&gt;/dash?token=… (token in data/&lt;name&gt;/tokens.json, key mcp).</p>"; return; }
+const safe = (s) => { try { return JSON.parse(s); } catch { return s; } };
+if (!agent) { document.body.innerHTML = '<div class="gate"><form><h1>Golem</h1><p>Open <code>/agents/&lt;name&gt;</code>, or the <a href="/">fleet page</a>.</p></form></div>'; }
+else {
   await loadTranscript();
-  connect();
+  stream(A.withToken(`${base}/events`), H, (st) => { const el = document.getElementById("live"); el.className = `live ${st}`; document.getElementById("livetxt").textContent = st === "on" ? "live" : "reconnecting…"; });
   refreshStatus(); refreshRuns(); refreshReflexes(); refreshInbox(); refreshShot(false);
-  setInterval(refreshStatus, 2000); setInterval(refreshRuns, 3000); setInterval(refreshReflexes, 5000);
-})();
+  setInterval(refreshStatus, 2000); setInterval(refreshRuns, 3000); setInterval(refreshReflexes, 6000); setInterval(refreshInbox, 5000); setInterval(() => refreshShot(false), 60000);
+}
 </script>
 </body>
 </html>

@@ -104,7 +104,7 @@ scripts/dev-server.sh --bg
 
 # Spawn a body, connect the mind, open the dashboard
 bin/golem up Clay
-# Prints a dashboard URL like http://127.0.0.1:8770/agents/Clay/dash?token=...
+# Prints the dashboard URLs: http://127.0.0.1:8770/ (fleet) and /agents/Clay (no token needed on localhost)
 
 # Chat with the running agent as its owner
 bin/golem talk Clay

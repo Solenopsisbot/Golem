@@ -109,7 +109,7 @@ async function main(): Promise<void> {
       const loaded = loadConfig(config);
       const names = rest.length ? rest : agentNames(loaded);
       if (!names.length) { log.error("no agents in golem.toml"); process.exit(1); }
-      const host = new GolemHttpHost(loaded.config.fleet.mcp_bind);
+      const host = new GolemHttpHost(loaded.config.fleet.mcp_bind, { dashboardAuth: loaded.config.fleet.dashboard_auth, fleetName: loaded.config.fleet.name });
       await host.start();
       const bus = new AgentBus({ maxTurns: loaded.config.comms.conversations.max_turns, cooldownMs: parseDuration(loaded.config.comms.conversations.cooldown), mirrorInGame: loaded.config.comms.agents === "both" });
       host.setFleet({ bus, sharedWorldDir: names.length ? resolveAgent(loaded, names[0]!).sharedWorldDir : undefined });
@@ -141,8 +141,8 @@ async function main(): Promise<void> {
       }));
       log.info(`up: ${sessions.map((s) => s.rt.mirror.summary(s.agent.name)).join(" || ")}`);
       log.info(`bridge: http://${host.host}:${host.port}/agents/<name>/{inbox,say,status,events} (bearer token in data/<name>/tokens.json)`);
-      for (const s of sessions) log.info(`dashboard: http://${host.host}:${host.port}/agents/${encodeURIComponent(s.agent.name)}/dash?token=${ensureTokens(s.agent).mcp}`);
-      if (sessions.length > 1) log.info(`fleet dashboard: http://${host.host}:${host.port}/dash?token=${ensureTokens(resolveAgent(loaded, names[0]!)).mcp}`);
+      for (const s of sessions) log.info(`dashboard: http://${host.host}:${host.port}/agents/${encodeURIComponent(s.agent.name)}${host.open ? "" : `?token=${ensureTokens(s.agent).mcp}`}`);
+      log.info(`fleet dashboard: http://${host.host}:${host.port}/${host.open ? "" : `?token=${ensureTokens(resolveAgent(loaded, names[0]!)).mcp}`}`);
       await new Promise(() => {}); // run until signalled
       return;
     }
@@ -172,7 +172,7 @@ async function main(): Promise<void> {
       if (!name) { log.error("no agents in golem.toml"); process.exit(1); }
       const tasks = loadTasks(target);
       log.info(`eval: ${tasks.length} task(s) with ${name}${label ? ` [${label}]` : ""}`);
-      const host = new GolemHttpHost(loaded.config.fleet.mcp_bind);
+      const host = new GolemHttpHost(loaded.config.fleet.mcp_bind, { dashboardAuth: loaded.config.fleet.dashboard_auth, fleetName: loaded.config.fleet.name });
       await host.start();
       const agent = resolveAgent(loaded, name);
       const sup = !agent.body.attach && !isBodyRunning(agent) ? superviseBody(agent) : undefined;

@@ -6,9 +6,11 @@ on the other end: a chat bot, a web page, a voice pipeline, a test harness. This
 
 ## Auth
 
-Each agent has a bearer token in `data/<name>/tokens.json` (`mcp`). Send it as
-`Authorization: Bearer <token>`, or as `?token=` on GET requests (event streams, pages). Fleet
-routes accept any agent's token.
+On a loopback bind with `fleet.dashboard_auth = "none"` (the default) none of the routes below need a
+token; only the mind's own MCP endpoint does. Otherwise each agent has a bearer token in
+`data/<name>/tokens.json` (`mcp`): send it as `Authorization: Bearer <token>`, or as `?token=` on GET
+requests (event streams, pages). Fleet routes accept any agent's token. `GET /api/config` (always
+public) says which mode is in effect.
 
 ## Inbound: talking to a golem
 

@@ -53,9 +53,11 @@ A task is a JSON file: a `goal` for the mind, a `setup` (RCON world reset: clear
 
 `bin/golem cost [agent...] [--hours N]` prints turns, input tokens (cached and not), tool calls per turn, compactions and the tool histogram per agent from the transcripts. If tool calls per turn creep past four, read a turn in the dashboard and see what the mind is doing one call at a time; usually it wants a library script.
 
-## The dashboard
+## The dashboards
 
-`golem up` prints a URL like `http://127.0.0.1:8770/agents/Clay/dash?token=…`. One page per agent: the state line, the live transcript (prompts, agent text, tool calls with results, turn ends with model and tokens), the inbox, runs, reflex toggles, the latest picture (or take a new one), a chat box that speaks as the first owner (fast paths like `goal …` and `met` work there too), and a met button. The page remembers the token in localStorage after the first open. No build step: it's `src/dashboard/index.html` over the bridge's SSE and JSON routes.
+`golem up` prints `http://127.0.0.1:8770/` for the fleet and `http://127.0.0.1:8770/agents/<name>` for each agent. On a loopback bind they open with no token (`fleet.dashboard_auth = "none"`, the default); set it to `"token"` and the pages ask for the fleet token once and remember it in localStorage. The mind's `/mcp` endpoint always needs its token whatever the setting.
+
+The fleet page: one card per agent (health and food bars, what it is holding and doing, its last line said, its goal), a live timeline of everything said, bussed, run and reflexed across the fleet with filters, a composer that speaks as the owner to one agent or everyone, the shared world files (tasks, places, chests) with search, and a `met all` button. The agent page: the state bar, the live transcript (prompts, agent text, tool calls with results, thoughts, turn ends with model and tokens) with filters, the inbox, runs, reflex toggles, the latest picture (or take a new one), a context meter, a chat box with the owner fast paths (`goal …`, `met`, `status`, `come`, `mode <reflex> off`), and a met button. No build step: `src/dashboard/{fleet,index}.html` share `style.css` and `common.js` and sit over the bridge's SSE and JSON routes; set `GOLEM_DEV=1` to reload them from disk on every request.
 
 ## Watching a mind
 

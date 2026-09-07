@@ -13,6 +13,12 @@ export const FleetSection = z.object({
   name: z.string().default("golem"),
   data_dir: z.string().default("./data"),
   mcp_bind: z.string().default("127.0.0.1:8770"),
+  /**
+   * "none": the dashboard, bridge and fleet routes need no token when Golem is bound to loopback
+   * (the mind's own MCP endpoint always needs its token). Bound to anything else, "none" is ignored
+   * with a warning and tokens are required. "token": always require a bearer token.
+   */
+  dashboard_auth: z.enum(["none", "token"]).default("none"),
 });
 
 export const ClefSection = z.object({

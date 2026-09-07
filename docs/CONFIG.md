@@ -6,7 +6,8 @@ One file per fleet. Anything under `[clef]`, `[mind]`, `[chat]`, `[drive]` is a 
 [fleet]
 name = "homestead"
 data_dir = "./data"            # data/<agent>/... lives here
-mcp_bind = "127.0.0.1:8770"    # Golem's MCP endpoints; per-agent bearer tokens are generated into data/
+mcp_bind = "127.0.0.1:8770"
+dashboard_auth = "none"        # none: no token for dashboards/bridge on a loopback bind (the mind's MCP endpoint always needs one); token: always require one    # Golem's MCP endpoints; per-agent bearer tokens are generated into data/
 
 [clef]
 # How to get a body. Either spawn from the launcher jar...
