@@ -48,6 +48,27 @@ async function stepOff(p: import("../primitives/index.ts").Primitives): Promise<
   return null;
 }
 
+/**
+ * Get out of a lingering cloud - dragon breath, a lingering potion - which is an ENTITY, not a block.
+ *
+ * This is the one danger `stepOff` cannot handle, and it fails silently in the worst way. The floor
+ * inside a cloud is perfectly good floor, so `stepOff` finds a "safe" spot one block away, walks
+ * there, and reports success while the bot keeps taking damage. It only searches rings 1 and 2, and
+ * dragon breath starts about three blocks across and grows, so two blocks never leaves it. Tester
+ * died twice in three minutes in a breath pool that way: damage, step one block, damage, step one
+ * block, with each planning turn cancelled by the damage interrupt before it could think its way out.
+ *
+ * Matching on the damage type does not work either - the lingering cloud deals `indirect_magic`,
+ * while `dragon_breath` is only the direct attack - so look for the cloud itself and cover real
+ * ground away from it.
+ */
+async function escapeCloud(p: import("../primitives/index.ts").Primitives): Promise<string | null> {
+  const clouds = await p.entities({ radius: 10, kinds: ["area_effect_cloud"] }).catch(() => [] as Entity[]);
+  if (!clouds.length) return null;
+  const r = await p.flee(clouds.map((c: Entity) => c.pos), 14, { timeoutMs: 10_000 });
+  return `${clouds.length} lingering cloud(s): moved to ${r.pos.x.toFixed(0)},${r.pos.z.toFixed(0)}`;
+}
+
 export const selfPreservation: Reflex<Danger> = {
   name: "self_preservation",
   description: "Get away from whatever is hurting you: off magma, fire, cactus and dragon breath, out of a wall, out of lava and water, away from an attacker when health is low.",
@@ -78,6 +99,9 @@ export const selfPreservation: Reflex<Danger> = {
       }
       return `in a wall: broke ${opened.join(", ") || "nothing (not solid?)"}`;
     }
+    // Before any floor check: a cloud outranks footing, and standing in one is how a fight is lost.
+    const fled = await escapeCloud(p).catch(() => null);
+    if (fled) return `hp ${d.hp.toFixed(0)}: ${fled}`;
     if (d.kind === "hot_floor" || d.kind === "in_fire" || d.kind === "prickly" || d.kind === "breath") {
       const spot = await stepOff(p);
       if (spot) return `${d.source}: stepped off to ${fmtPos(spot)}`;
