@@ -176,6 +176,7 @@ blueprints and `build`, cross-process fleet peering. See
 | [SETUP.md](docs/SETUP.md) | From nothing to a golem in a world: Clef, server, config, first run |
 | [DEV.md](docs/DEV.md) | Day-to-day commands, shell, evals, dashboard, watching a mind |
 | [DEPLOY.md](docs/DEPLOY.md) | Running bodies on a remote machine |
+| [BRIDGE.md](docs/BRIDGE.md) | Hooking a golem into other systems: inbox, events, webhooks |
 | [ENDPOINTS.md](docs/ENDPOINTS.md) | Pointing a mind at a custom LLM endpoint |
 | [ROADMAP.md](docs/ROADMAP.md) | Milestones and what's done |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Checks, conventions, what belongs in a tool vs. a script |

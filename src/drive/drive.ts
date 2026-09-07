@@ -175,6 +175,9 @@ export class Drive {
     const m = this.rt.mirror;
     const a = this.rt.agent;
     b.on("chat", (d: { text: string; sender?: string; kind: string }) => {
+      // Our own line echoing back from the server is the ground truth for "the golem said": it covers
+      // the mind's say tool, the owner fast path, reflex announcements and mirrored dms alike.
+      if (d.sender === a.name) { this.emit({ type: "said", text: d.text.replace(/^<[^>]+>\s*/, ""), kind: d.kind }); return; }
       // Fleet-mates talk over the bus; their in-game lines (including mirrored dms) are for players.
       if (d.sender && d.sender !== a.name && this.bus?.has(d.sender)) return;
       const r = routeChat(a, d);
@@ -369,6 +372,8 @@ export class Drive {
     this.turnToolCalls++;
     this.transcript.add("tool", `${name}(${JSON.stringify(args)}) -> ${result}`, { ms, isError });
     this.emit({ type: "golem_tool", name, args, result: result.slice(0, 500), ms, isError });
+    // A dm gets its own event so outside systems don't have to fish it out of tool calls.
+    if (!isError && name === "dm" && args && typeof (args as { text?: unknown }).text === "string") this.emit({ type: "dm", to: (args as { agent?: string }).agent, text: (args as { text: string }).text });
   }
 
   // ---- owner fast path ----------------------------------------------------------------

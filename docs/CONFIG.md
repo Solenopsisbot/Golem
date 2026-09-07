@@ -114,3 +114,5 @@ option, so two-tier routing switches it per turn. Tested end to end on gpt-5.5 a
 ## Custom LLM endpoints
 
 Pointing a mind at a custom endpoint (a gateway, a self-hosted model, Logfare) depends on the wire protocol it speaks. See `docs/ENDPOINTS.md`: Anthropic Messages endpoints go through Claude Code env vars, OpenAI Responses endpoints through a Codex `model_providers` block plus `GOLEM_CODEX_PROVIDER`, and plain OpenAI Chat Completions endpoints need a small dedicated adapter (planned).
+
+The `[bridge]` section (HTTP inbox/events on or off, webhooks, shell commands on events) is documented with the full HTTP contract in `docs/BRIDGE.md`.

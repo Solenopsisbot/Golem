@@ -8,6 +8,7 @@
 //   /agents/<name>/runs, /reflexes (GET/POST), /inbox (GET), /transcript, /shot, /met   dashboard data
 //   /dash                   GET  the fleet page: every agent, the bus, the shared files
 //   /fleet/status|bus|shared|events   fleet data (any agent's token works)
+//   /fleet/inbox            POST {text, from?, kind?, priority?}  push the same item to every agent
 // All routes require `Authorization: Bearer <agent mcp token>` (or ?token= on GET, for the browser).
 // Bound to 127.0.0.1 by default.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -88,7 +89,7 @@ export class GolemHttpHost {
       return;
     }
     if (url.pathname === "/dash") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(fleetHtml()); return; }
-    const fm = /^\/fleet\/(status|bus|shared|events)$/.exec(url.pathname);
+    const fm = /^\/fleet\/(status|bus|shared|events|inbox)$/.exec(url.pathname);
     if (fm) {
       if (!this.fleetAuthed(req, url)) { res.writeHead(401, { "content-type": "text/plain" }); res.end("unauthorized"); return; }
       return this.handleFleet(fm[1]!, req, res);
@@ -217,6 +218,17 @@ export class GolemHttpHost {
 
   private handleFleet(route: string, req: IncomingMessage, res: ServerResponse): void {
     switch (route) {
+      case "inbox": {
+        if (req.method !== "POST") { res.writeHead(405); res.end(); return; }
+        void this.readJson(req).then((raw) => {
+          const b = raw as { text?: string; from?: string; kind?: string; priority?: number } | undefined;
+          if (!b?.text) { res.writeHead(400, { "content-type": "text/plain" }); res.end("text required"); return; }
+          const ids: Record<string, number> = {};
+          for (const [name, h] of this.agents) ids[name] = h.drive.pushExternal({ text: b.text, from: b.from, kind: b.kind, priority: b.priority }).id;
+          this.json(res, { ok: true, ids });
+        });
+        return;
+      }
       case "status": return this.json(res, { agents: this.agentRows(), bus: !!this.fleet.bus, shared: !!this.fleet.sharedWorldDir });
       case "bus": return this.json(res, (this.fleet.bus?.log ?? []).slice(-150));
       case "shared": {
