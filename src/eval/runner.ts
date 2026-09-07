@@ -109,8 +109,13 @@ export class EvalRunner {
       await run(`execute at ${bot} run spawnpoint ${bot} ~ ~ ~`);
     } else if (dim === "minecraft:the_end") {
       await run(`execute in ${dim} run spreadplayers 0 0 5 60 false ${bot}`);   // safe ground on the main island
+      // Respawn in the dimension the rung put you in. Without this a death in the End sends the bot
+      // to the overworld sky platform, a dimension and a thousand blocks from the fight, and the run
+      // is over however much time is left on the clock.
+      await run(`execute at ${bot} run spawnpoint ${bot} ~ ~ ~`);
     } else if (dim) {
       await run(`execute in ${dim} run tp ${bot} ~ 70 ~`);
+      await run(`execute at ${bot} run spawnpoint ${bot} ~ ~ ~`);
     }
     // Wherever the bot landed, take the magma and fire out from under it: spreadplayers counts a
     // magma block as solid footing, and a bot that starts on one loses a heart a second.
@@ -124,11 +129,14 @@ export class EvalRunner {
     // Armour in the give list is worn, not just dropped in the bag: with keepInventory a bot that
     // starts and respawns already armoured can survive the opening seconds of a swarm long enough to
     // fight back, instead of dying unarmoured before it can equip anything.
-    const ARMOR: Record<string, string> = { helmet: "head", chestplate: "chest", leggings: "legs", boots: "feet" };
+    // carved_pumpkin is head gear too, and the reason to want it: wearing one stops endermen reacting
+    // to being looked at, which is what a bot aiming a bow in the End does constantly.
+    const ARMOR: Record<string, string> = { helmet: "head", chestplate: "chest", leggings: "legs", boots: "feet", carved_pumpkin: "head" };
+    const wear: { slot: string; item: string }[] = [];
     for (const g of s.give) {
       const bare = g.split(/\s+/)[0]!.replace(/^minecraft:/, "");
       const piece = Object.keys(ARMOR).find((k) => bare.endsWith(k));
-      if (piece) await run(`item replace entity ${bot} armor.${ARMOR[piece]} with minecraft:${bare}`);
+      if (piece) wear.push({ slot: ARMOR[piece]!, item: bare });
       else await run(`give ${bot} ${g.startsWith("minecraft:") ? g : "minecraft:" + g}`);
     }
     for (const c of s.commands) await run(c);
@@ -151,6 +159,19 @@ export class EvalRunner {
         } else {
           await run(`execute at ${bot} run summon minecraft:${mob} ~${3 + i} ~ ~${(i % 2 ? -1 : 1) * 3} ${nbt}`);
         }
+      }
+    }
+    // Dress the bot last, once the world has stopped moving under it. Sent during placement the
+    // equipment does not stick - the body is still settling into the chunk it was teleported to and
+    // only the final slot survives - so this waits, applies, and checks, retrying once.
+    if (wear.length) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await new Promise((r) => setTimeout(r, 800));
+        for (const w of wear) await run(`item replace entity ${bot} armor.${w.slot} with minecraft:${w.item}`);
+        const worn = await (await this.rconConnect()).command(`data get entity ${bot} equipment`);
+        const missing = wear.filter((w) => !worn.includes(w.item));
+        if (!missing.length) break;
+        log.warn(`armour did not stick (${missing.map((m) => m.item).join(", ")}); retrying`);
       }
     }
     if (s.arena) {

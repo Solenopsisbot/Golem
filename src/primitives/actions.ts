@@ -279,6 +279,11 @@ const WEARABLE = /_(helmet|chestplate|leggings|boots)$|^minecraft:(elytra|shield
 export async function equip(ctx: Ctx, item: string): Promise<{ slot: number | null; held: string }> {
   const id = fullId(item);
   if (WEARABLE.test(id)) {
+    // Already wearing it? Then stop. The body's equip is a shift-click from the player inventory, and
+    // the armour slots are part of that inventory, so shift-clicking a worn piece takes it OFF. A mind
+    // that defensively re-equips its armour each turn would strip itself, then fight a dragon in a shirt.
+    const worn = ctx.mirror.status?.player?.armor ?? [];
+    if (worn.some((w) => w && w !== "empty" && fullId(w) === id)) return { slot: null, held: ctx.mirror.heldItem };
     try { await ctx.body.call("equip", { item: id }); } catch (e) { throw fromClef(e, `equip ${item}`); }
     return { slot: null, held: ctx.mirror.heldItem };
   }
