@@ -22,9 +22,19 @@ export const autoRespawn: Reflex<true> = {
 
 interface Danger { kind: "hurt" | "burning" | "lava" | "drowning" | "hot_floor" | "in_fire" | "in_wall" | "prickly" | "breath"; hp: number; source?: string }
 
-/** Damage types the body reports that mean "the block you are standing in or on is hurting you". */
+/**
+ * Damage types that mean "where you are standing is hurting you", and so are worth acting on at any
+ * health rather than waiting for the low-health trigger.
+ *
+ * `indirect_magic` is here because it is how a lingering cloud actually damages you - through the
+ * Instant Damage effect it applies - and `dragon_breath` is only the direct attack. Without it the
+ * cloud went unnoticed until health fell to 7, which is far too late: the pool ticks once a second
+ * and walking clear takes a few seconds, so the escape started already losing the race. Tester died
+ * at hp 2 with the escape running.
+ */
 const FLOOR_DANGER: Record<string, Danger["kind"]> = {
-  hot_floor: "hot_floor", in_fire: "in_fire", in_wall: "in_wall", cactus: "prickly", sweet_berry_bush: "prickly", dragon_breath: "breath",
+  hot_floor: "hot_floor", in_fire: "in_fire", in_wall: "in_wall", cactus: "prickly", sweet_berry_bush: "prickly",
+  dragon_breath: "breath", indirect_magic: "breath",
 };
 const BAD_FOOTING = new Set(["minecraft:magma_block", "minecraft:lava", "minecraft:fire", "minecraft:soul_fire", "minecraft:cactus", "minecraft:sweet_berry_bush", "minecraft:campfire", "minecraft:soul_campfire", "minecraft:wither_rose", "minecraft:powder_snow"]);
 
