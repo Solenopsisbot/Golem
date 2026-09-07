@@ -279,7 +279,7 @@ export class GolemHttpHost {
         x: m.pos.x, y: m.pos.y, z: m.pos.z, yaw: m.yaw, pitch: m.pitch, dimension: strip(m.dimension), biome: strip(biome) || null,
         gamemode: pl?.gamemode ?? null, health: m.health, food: m.food, xpLevel: pl?.xpLevel ?? null, xpProgress: pl?.xpProgress ?? null,
         light, onGround: pl?.onGround ?? null, usingItem: pl?.usingItem ?? null, held: strip(m.heldItem), selectedSlot: m.selectedSlot,
-        pathing: m.navActive, lastDamageAgo: m.lastDamageAt ? now - m.lastDamageAt : null, lastAttacker: m.lastAttacker ? strip(m.lastAttacker.type) : null,
+        pathing: m.navActive, lastDamageAgo: m.lastDamageAt ? now - m.lastDamageAt : null, lastAttacker: m.lastAttacker ? strip(m.lastAttacker.type) : null, lastDamageSource: m.lastDamageSource?.source ?? null,
         maxHealth: pl?.maxHealth ?? 20, absorption: pl?.absorption ?? 0, saturation: pl?.saturation ?? null, armorPoints: pl?.armorPoints ?? null, air: pl?.air ?? null,
         onFire: pl?.onFire ?? false, inWater: pl?.inWater ?? false, inLava: pl?.inLava ?? false, sleeping: pl?.sleeping ?? false, sneaking: pl?.sneaking ?? false, sprinting: pl?.sprinting ?? false,
         fallDistance: pl?.fallDistance ?? 0, effects: (pl?.effects ?? []).map((e) => ({ id: strip(e.id), amplifier: e.amplifier, seconds: Math.round(e.ticks / 20) })),

@@ -1,11 +1,13 @@
 {
   "name": "blaze_rod",
   "description": "Near a fortress in the Nether, kill blazes for a rod.",
-  "goal": "You are in the Nether near a fortress. Find it, find blazes (they spawn around blaze spawners in the fortress), kill them and get at least 1 blaze rod. Keep the rod safe: dig in when hurt, don't fight over lava. Say 'got a rod' when you have one.",
+  "goal": "Blazes are attacking you in a nether arena. Kill them and get at least 1 blaze rod. Put your armour on first (equip each piece), then use your bow on them (shoot(blaze)) since they fly out of sword reach; melee only when one drops next to you. Eat if you fall below half health. Say 'got a rod' when you have one.",
   "timeout_s": 1500,
   "setup": {
     "clear_inventory": true,
     "give": [
+      "bow",
+      "arrow 64",
       "diamond_sword",
       "iron_helmet",
       "iron_chestplate",
@@ -15,10 +17,18 @@
       "cobblestone 64",
       "diamond_pickaxe"
     ],
-    "dimension": "the_nether",
-    "locate": {
-      "structure": "fortress",
-      "y": 72
+    "summon": [
+      "blaze 2"
+    ],
+    "arena": {
+      "dimension": "the_nether",
+      "center": [
+        200,
+        110,
+        200
+      ],
+      "half": 10,
+      "height": 9
     }
   },
   "success": [

@@ -41,6 +41,8 @@ export class Mirror {
   mineDone: { x: number; y: number; z: number; broken: boolean; reason?: string; at: number } | null = null;
   /** Who hit us last (entityHurt with self:true). */
   lastAttacker: { id: number; type: string; at: number } | null = null;
+  /** What hurt us last, as the vanilla damage type ("hot_floor", "in_fire", "lava", "in_wall", "fall", "mob_attack", ...). */
+  lastDamageSource: { source: string; at: number } | null = null;
   /** Where the body last stood out of water and lava: the drowning escape goes back there. */
   lastDryPos: { x: number; y: number; z: number } | null = null;
   lastPickup: { item: string; count: number; at: number } | null = null;
@@ -71,6 +73,11 @@ export class Mirror {
   get blockPos(): Pos { return floorPos(this.pos); }
 
   /** Damage taken in the last `ms` milliseconds. */
+  /** The damage type seen in the last `ms`, or null: lets reflexes tell a magma block from a skeleton. */
+  damageSourceInLast(ms: number): string | null {
+    const d = this.lastDamageSource;
+    return d && Date.now() - d.at <= ms ? d.source : null;
+  }
   damageInLast(ms: number): number {
     const cutoff = Date.now() - ms;
     return this.damage.filter((d) => d.t >= cutoff).reduce((a, d) => a + d.amount, 0);
@@ -131,8 +138,9 @@ export class Mirror {
     b.on("nav.failed", (d: { reason?: string }) => { this.navEvent = { kind: "failed", at: Date.now(), reason: d?.reason }; this.navActive = false; this.changed("nav"); });
     // Protocol-2 events (present when the body has them; harmless otherwise).
     b.on("mineDone", (d: { x: number; y: number; z: number; broken: boolean; reason?: string }) => { this.mineDone = { ...d, at: Date.now() }; this.changed("mineDone"); });
-    b.on("entityHurt", (d: { id: number; type: string; self: boolean; health: number; attacker?: number; attackerType?: string }) => {
+    b.on("entityHurt", (d: { id: number; type: string; self: boolean; health: number; source?: string; attacker?: number; attackerType?: string }) => {
       if (d.self && typeof d.attacker === "number" && d.attacker >= 0) this.lastAttacker = { id: d.attacker, type: d.attackerType ?? "unknown", at: Date.now() };
+      if (d.self && d.source) this.lastDamageSource = { source: d.source.replace(/^minecraft:/, ""), at: Date.now() };
       this.changed("entityHurt");
     });
     b.on("itemPickup", (d: { item: string; count: number }) => { this.lastPickup = { ...d, at: Date.now() }; this.inventoryDirty = true; this.changed("itemPickup"); });

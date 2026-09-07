@@ -178,7 +178,10 @@ async function main(): Promise<void> {
       const sup = !agent.body.attach && !isBodyRunning(agent) ? superviseBody(agent) : undefined;
       const runner = new EvalRunner({ agentName: name, loaded, host, fresh: !keepSession, label });
       const results = [];
-      const shutdown = async () => { runner.close(); await sup?.stop(); await host.stop().catch(() => {}); process.exit(0); };
+      const shutdown = async () => {
+        setTimeout(() => { log.warn("eval: shutdown took too long; exiting"); process.exit(1); }, 20_000).unref();
+        await runner.close().catch(() => {}); await sup?.stop(); await host.stop().catch(() => {}); process.exit(0);
+      };
       process.once("SIGINT", shutdown);
       for (const { path, task } of tasks) {
         log.info(`--- ${task.name}: ${task.description || task.goal}`);

@@ -41,8 +41,26 @@ export const TaskSchema = z.object({
     give: z.array(z.string()).default([]),   // "oak_log 8", "iron_pickaxe"
     /** Move the bot to another dimension first: spreadplayers on the End island, or a plain tp elsewhere. */
     dimension: z.enum(["overworld", "the_nether", "the_end"]).optional(),
-    /** Teleport near the nearest structure of this kind (server `locate`), in `dimension` if set. */
-    locate: z.object({ structure: z.string(), y: z.number().default(70), offset: z.number().default(0) }).optional(),
+    /**
+     * Put the bot near the nearest structure of this kind (server `locate`), in `dimension` if set.
+     * `spread` (default) uses spreadplayers within `radius` blocks of the structure's origin, which only
+     * picks solid, non-lava footing (under the bedrock roof in the Nether); `spread: false` is a raw
+     * tp to `y`, which in the Nether is usually inside a wall or over lava.
+     */
+    locate: z.object({ structure: z.string(), y: z.number().default(70), offset: z.number().default(0), spread: z.boolean().default(true), radius: z.number().default(12) }).optional(),
+    /**
+     * Build a sealed, lit stone arena and stand the bot in the middle of it. This sidesteps the
+     * terrain lottery for combat rungs: real generated ground in the Nether (magma over a lava sea)
+     * or a wild structure often kills the bot on arrival before it can act. The arena is a solid
+     * stone shell with a hollow, glowstone-ceilinged interior, so nothing intrudes and nothing spawns.
+     * `summon` mobs then appear inside it next to the bot.
+     */
+    arena: z.object({
+      dimension: z.enum(["overworld", "the_nether", "the_end"]).default("the_nether"),
+      center: z.tuple([z.number(), z.number(), z.number()]),
+      half: z.number().default(6),     // interior half-width in blocks
+      height: z.number().default(5),   // interior height in blocks
+    }).optional(),
     /** Summon mobs next to the bot after everything else: "enderman 3". */
     summon: z.array(z.string()).default([]),
   }).prefault({}),

@@ -88,7 +88,7 @@ script tunnel_flat(dir: string = "east", n: int = 24): pos {
 /// Look for the end portal frames from inside a stronghold, tunnelling outward when none are in sight.
 script find_portal_room(tries: int = 6): pos {
   for (i of range(tries)) {
-    let frames = find_blocks("end_portal_frame", radius: 96, max: 12)
+    let frames = find_blocks("end_portal_frame", radius: 64, max: 12)
     if (frames.empty == false) {
       let f = frames.first
       log "portal frames near ${f.pos}"

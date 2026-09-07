@@ -20,6 +20,9 @@ export interface RunnerOptions { agentName: string; loaded: LoadedConfig; host: 
 export class EvalRunner {
   private readonly opts: RunnerOptions;
   private rcon: Rcon | undefined;
+  /** The session of the task in flight, so close() (Ctrl-C) can stop it instead of hanging on the mind. */
+  private active: AgentSession | undefined;
+  private aborted = false;
   constructor(opts: RunnerOptions) { this.opts = opts; }
 
   private async rconConnect(): Promise<Rcon> {
@@ -38,23 +41,80 @@ export class EvalRunner {
     const r = await this.rconConnect();
     const run = async (c: string) => { const out = await r.command(c.replace(/\{bot\}/g, bot)); log.debug(`rcon ${c} -> ${out.slice(0, 80)}`); };
     const s = task.setup;
+    // Keep gear through death: a combat rung that respawns the bot into the fight must not strip it
+    // to an empty inventory each death, or every retry is worse than the last. Also stop mobs from
+    // burning up the moment they are summoned onto lit ground far from natural spawns.
+    await run(`gamerule keepInventory true`);
+    // A safe fallback respawn: a lit sky platform at (0, 200, 0). Without this, a death in a hostile
+    // dimension dumps the bot at the overworld world-spawn, which on the shared dev world is a
+    // night killing-floor, and it death-loops there instead of failing the rung cleanly. The
+    // sea-lantern floor is light 15, so nothing spawns on it.
+    await run(`execute in minecraft:overworld run fill -1 199 -1 1 199 1 minecraft:sea_lantern`);
+    await run(`execute in minecraft:overworld run fill -1 200 -1 1 202 1 minecraft:air`);
+    await run(`execute in minecraft:overworld run spawnpoint ${bot} 0 200 0`);
     if (s.gamemode) await run(`gamemode ${s.gamemode} ${bot}`);
     if (s.clear_inventory) await run(`clear ${bot}`);
     if (s.teleport) await run(`tp ${bot} ${s.teleport.join(" ")}`);
     if (s.spread) await run(`spreadplayers ${s.spread[0]} ${s.spread[1]} 1 ${s.spread[2]} false ${bot}`);
+    if (s.arena) {
+      const [cx, cy, cz] = s.arena.center, h = s.arena.half, ht = s.arena.height, adim = `minecraft:${s.arena.dimension}`;
+      // fill silently does nothing in an unloaded chunk, and the arena is far from any player, so
+      // force-load the span first; otherwise the bot arrives embedded in the original terrain and
+      // the summoned mobs suffocate. Released at the end of setup.
+      await run(`execute in ${adim} run forceload add ${cx - h - 1} ${cz - h - 1} ${cx + h + 1} ${cz + h + 1}`);
+      // Kill any mob left inside from a previous run (blazes get sealed in and otherwise pile up),
+      // and any hostile the terrain trapped, before we (re)build and summon.
+      await run(`execute in ${adim} run kill @e[type=!minecraft:player,x=${cx - h - 2},y=${cy - 3},z=${cz - h - 2},dx=${2 * h + 4},dy=${ht + 6},dz=${2 * h + 4}]`);
+      // Solid shell, then hollow interior, then a glowstone ceiling so it is fully lit.
+      await run(`execute in ${adim} run fill ${cx - h - 1} ${cy - 1} ${cz - h - 1} ${cx + h + 1} ${cy + ht + 1} ${cz + h + 1} minecraft:stone`);
+      await run(`execute in ${adim} run fill ${cx - h} ${cy} ${cz - h} ${cx + h} ${cy + ht} ${cz + h} minecraft:air`);
+      await run(`execute in ${adim} run fill ${cx - h} ${cy + ht} ${cz - h} ${cx + h} ${cy + ht} ${cz + h} minecraft:glowstone`);
+      await run(`execute in ${adim} run tp ${bot} ${cx + 0.5} ${cy} ${cz + 0.5}`);
+      // Respawn back into the arena (not the overworld sky platform), so a death returns the bot to
+      // the fight instead of stranding it a dimension away. The arena is lit and sealed, so the only
+      // thing that can kill it there is the mobs it is meant to be fighting.
+      await run(`execute in ${adim} run spawnpoint ${bot} ${cx} ${cy} ${cz}`);
+      log.info(`built a ${2 * h + 1}×${ht}×${2 * h + 1} arena at ${cx},${cy},${cz} in ${s.arena.dimension}`);
+    }
     const dim = s.dimension ? `minecraft:${s.dimension}` : undefined;
-    if (s.locate) {
+    if (s.arena) { /* arena placed the bot; skip structure/dimension placement */ }
+    else if (s.locate) {
       // "The nearest minecraft:fortress is at [X, ~, Z] (N blocks away)"; the source position matters, so give it one.
       const out = await r.command(`execute ${dim ? `in ${dim} ` : ""}positioned 0 64 0 run locate structure minecraft:${s.locate.structure}`);
       const m = out.match(/\[(-?\d+),\s*~?-?\d*,\s*(-?\d+)\]/);
       if (!m) throw new Error(`locate ${s.locate.structure} failed: ${out.slice(0, 120)}`);
       const x = Number(m[1]) + s.locate.offset, z = Number(m[2]) + s.locate.offset;
-      log.info(`located ${s.locate.structure} at ${x},${z}; teleporting`);
-      await run(`execute ${dim ? `in ${dim} ` : ""}run tp ${bot} ${x} ${s.locate.y} ${z}`);
+      if (dim === "minecraft:the_nether") {
+        // The Nether has no safe "surface": spreadplayers lands on magma bridges over lava and the bot
+        // burns to death before it can move. Neutralise the hazard around the structure instead of
+        // trusting the terrain: clear lava and magma from a generous box (lava outside can't reach the
+        // centre), lay a solid floor, clear standing room, and stand the bot on it. The fortress
+        // (nether brick) is left intact a few blocks away for the bot to walk to.
+        const y = s.locate.y;
+        log.info(`located ${s.locate.structure} at ${x},${z}; clearing lava and building a pad at y${y}`);
+        await run(`execute in ${dim} run fill ${x - 6} ${y - 3} ${z - 6} ${x + 6} ${y + 5} ${z + 6} minecraft:netherrack replace minecraft:lava`);
+        await run(`execute in ${dim} run fill ${x - 6} ${y - 3} ${z - 6} ${x + 6} ${y + 5} ${z + 6} minecraft:air replace minecraft:magma_block`);
+        await run(`execute in ${dim} run fill ${x - 3} ${y - 1} ${z - 3} ${x + 3} ${y - 1} ${z + 3} minecraft:netherrack`);
+        await run(`execute in ${dim} run fill ${x - 3} ${y} ${z - 3} ${x + 3} ${y + 2} ${z + 3} minecraft:air`);
+        await run(`execute in ${dim} run tp ${bot} ${x + 0.5} ${y} ${z + 0.5}`);
+      } else if (s.locate.spread) {
+        log.info(`located ${s.locate.structure} at ${x},${z}; spreading nearby`);
+        await run(`execute ${dim ? `in ${dim} ` : ""}run spreadplayers ${x} ${z} 1 ${s.locate.radius} false ${bot}`);
+      } else {
+        log.info(`located ${s.locate.structure} at ${x},${z}; teleporting`);
+        await run(`execute ${dim ? `in ${dim} ` : ""}run tp ${bot} ${x} ${s.locate.y} ${z}`);
+      }
     } else if (dim === "minecraft:the_end") {
       await run(`execute in ${dim} run spreadplayers 0 0 5 60 false ${bot}`);   // safe ground on the main island
     } else if (dim) {
       await run(`execute in ${dim} run tp ${bot} ~ 70 ~`);
+    }
+    // Wherever the bot landed, take the magma and fire out from under it: spreadplayers counts a
+    // magma block as solid footing, and a bot that starts on one loses a heart a second.
+    if (s.locate || dim || s.spread || s.teleport) {
+      await run(`execute at ${bot} run fill ~-2 ~-1 ~-2 ~2 ~-1 ~2 ${dim === "minecraft:the_nether" ? "minecraft:netherrack" : "minecraft:stone"} replace minecraft:magma_block`);
+      await run(`execute at ${bot} run fill ~-2 ~ ~-2 ~2 ~2 ~2 minecraft:air replace minecraft:fire`);
+      await run(`execute at ${bot} run fill ~-2 ~ ~-2 ~2 ~2 ~2 minecraft:air replace minecraft:soul_fire`);
     }
     if (s.time) await run(`time set ${s.time}`);
     if (s.weather) await run(`weather ${s.weather}`);
@@ -63,6 +123,11 @@ export class EvalRunner {
     for (const sm of s.summon) {
       const [mob, n] = sm.split(/\s+/);
       for (let i = 0; i < Number(n ?? 1); i++) await run(`execute at ${bot} run summon minecraft:${mob} ~${3 + i} ~ ~${(i % 2 ? -1 : 1) * 3}`);
+    }
+    if (s.arena) {
+      // The bot itself now keeps the arena chunks loaded, so drop the forceload we added for the fill.
+      const [cx, , cz] = s.arena.center, h = s.arena.half;
+      await run(`execute in minecraft:${s.arena.dimension} run forceload remove ${cx - h - 1} ${cz - h - 1} ${cx + h + 1} ${cz + h + 1}`);
     }
   }
 
@@ -106,6 +171,7 @@ export class EvalRunner {
     const said: string[] = [];
     let deaths = 0, turns = 0, toolCalls = 0, tokens = 0, lastContext = 0;
     const session = await AgentSession.start(agent, host, { waitForBodyMs: 900_000, orient: false, freshMind: task.fresh_session && (this.opts.fresh ?? true) });
+    this.active = session;
     // Count as things happen: the final turn is usually still running when the predicate passes.
     const off = session.subscribeEvents((ev) => {
       if (ev.type === "prompt" && !ev.queued) turns++;
@@ -123,19 +189,22 @@ export class EvalRunner {
       session.drive.goal = task.goal;
       session.drive.push({ kind: "goal", priority: 80, from: loaded.config.players.owners[0] ?? "eval", text: `${loaded.config.players.owners[0] ?? "eval"} set your goal: ${task.goal}` });
       const deadline = t0 + task.timeout_s * 1000;
-      while (Date.now() < deadline) {
+      while (Date.now() < deadline && !this.aborted) {
         await new Promise((r) => setTimeout(r, 5000));
+        if (this.aborted) break;
         const s = await this.check(session, task.success, said, deaths);
         if (s.ok) { status = "success"; detail = s.detail; break; }
         detail = s.detail;
         if (task.fail.length) { const f = await this.check(session, task.fail, said, deaths); if (f.ok) { status = "failed"; detail = `fail predicate: ${f.detail}`; break; } }
       }
+      if (this.aborted && status === "timeout") { status = "error"; detail = "aborted"; }
     } catch (e) {
-      status = "error"; detail = (e as Error).message;
+      status = "error"; detail = this.aborted ? "aborted" : (e as Error).message;
     } finally {
       off();
       session.drive.goal = "";
       await session.stop().catch(() => {});
+      this.active = undefined;
     }
     const result: TaskResult = {
       name: task.name, path: "", status, seconds: (Date.now() - t0) / 1000, turns, toolCalls, tokens: tokens || lastContext, deaths, detail,
@@ -153,5 +222,10 @@ export class EvalRunner {
     log.info(`${r.name}: ${r.status} in ${r.seconds.toFixed(0)}s (${r.turns} turns, ${r.toolCalls} tool calls, ${r.deaths} deaths) ${r.detail}`);
   }
 
-  close(): void { this.rcon?.close(); }
+  /** Stop whatever is running: the poll loop, the live session (mind and body connection), RCON. */
+  async close(): Promise<void> {
+    this.aborted = true;
+    this.rcon?.close();
+    await this.active?.stop().catch(() => {});
+  }
 }

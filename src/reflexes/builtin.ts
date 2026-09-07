@@ -20,11 +20,37 @@ export const autoRespawn: Reflex<true> = {
   },
 };
 
-interface Danger { kind: "hurt" | "burning" | "lava" | "drowning"; hp: number }
+interface Danger { kind: "hurt" | "burning" | "lava" | "drowning" | "hot_floor" | "in_fire" | "in_wall" | "prickly" | "breath"; hp: number; source?: string }
+
+/** Damage types the body reports that mean "the block you are standing in or on is hurting you". */
+const FLOOR_DANGER: Record<string, Danger["kind"]> = {
+  hot_floor: "hot_floor", in_fire: "in_fire", in_wall: "in_wall", cactus: "prickly", sweet_berry_bush: "prickly", dragon_breath: "breath",
+};
+const BAD_FOOTING = new Set(["minecraft:magma_block", "minecraft:lava", "minecraft:fire", "minecraft:soul_fire", "minecraft:cactus", "minecraft:sweet_berry_bush", "minecraft:campfire", "minecraft:soul_campfire", "minecraft:wither_rose", "minecraft:powder_snow"]);
+
+/**
+ * Walk to the nearest neighbouring block that is safe to stand on: solid floor that is none of the
+ * hurting kinds, with two air blocks above. Ring 1 first, then ring 2. Returns where it went, or null.
+ */
+async function stepOff(p: import("../primitives/index.ts").Primitives): Promise<{ x: number; y: number; z: number } | null> {
+  const here = p.ctx.mirror.blockPos;
+  const ring = (r: number) => { const out: [number, number][] = []; for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) if (Math.max(Math.abs(dx), Math.abs(dz)) === r) out.push([dx, dz]); return out.sort((a, b) => (Math.abs(a[0]) + Math.abs(a[1])) - (Math.abs(b[0]) + Math.abs(b[1]))); };
+  for (const r of [1, 2]) {
+    for (const [dx, dz] of ring(r)) {
+      for (const dy of [0, 1, -1]) {   // same level first, then a step up or down
+        const spot = { x: here.x + dx, y: here.y + dy, z: here.z + dz };
+        const [floor, feet, head] = await Promise.all([p.blockAt({ ...spot, y: spot.y - 1 }), p.blockAt(spot), p.blockAt({ ...spot, y: spot.y + 1 })]);
+        if (!floor.solid || BAD_FOOTING.has(floor.id) || !feet.air || !head.air || BAD_FOOTING.has(feet.id)) continue;
+        try { await p.goto(spot, { reach: 0, timeoutMs: 6000 }); return spot; } catch { continue; }
+      }
+    }
+  }
+  return null;
+}
 
 export const selfPreservation: Reflex<Danger> = {
   name: "self_preservation",
-  description: "Get away from whatever is hurting you when health is low; escape lava, fire and water when the body reports them.",
+  description: "Get away from whatever is hurting you: off magma, fire, cactus and dragon breath, out of a wall, out of lava and water, away from an attacker when health is low.",
   priority: 90,
   interrupts: true,
   cooldownMs: 4000,
@@ -32,13 +58,32 @@ export const selfPreservation: Reflex<Danger> = {
     const m = ctx.mirror;
     const s = m.status?.player;
     if (s?.inLava) return { kind: "lava", hp: m.health };
+    // Standing in or on something that hurts: act at any health, every second on a magma block costs a heart.
+    const src = m.damageSourceInLast(2500);
+    if (src && FLOOR_DANGER[src] && m.damageInLast(2500) > 0) return { kind: FLOOR_DANGER[src]!, hp: m.health, source: src };
     if (s?.onFire && m.health <= 12) return { kind: "burning", hp: m.health };
     if (s?.air !== undefined && s.air <= 60) return { kind: "drowning", hp: m.health };
-    if (m.health <= 7 && m.damageInLast(3000) > 0) return { kind: "hurt", hp: m.health };
+    if (m.health <= 7 && m.damageInLast(3000) > 0) return { kind: "hurt", hp: m.health, source: src ?? undefined };
     return null;
   },
   async act(p, d) {
     const ctx = p.ctx;
+    if (d.kind === "in_wall") {
+      // Suffocating inside a block (a bad teleport, sand falling on you): open the head and feet blocks.
+      const here = ctx.mirror.blockPos;
+      const opened: string[] = [];
+      for (const dy of [1, 0]) {
+        const b = await p.blockAt({ x: here.x, y: here.y + dy, z: here.z });
+        if (b.solid) { try { await p.mine(b.pos, { collect: false }); opened.push(b.short); } catch { /* keep going */ } }
+      }
+      return `in a wall: broke ${opened.join(", ") || "nothing (not solid?)"}`;
+    }
+    if (d.kind === "hot_floor" || d.kind === "in_fire" || d.kind === "prickly" || d.kind === "breath") {
+      const spot = await stepOff(p);
+      if (spot) return `${d.source}: stepped off to ${fmtPos(spot)}`;
+      await p.move("forward", 700, { sprint: true, jump: true });
+      return `${d.source}: no safe block beside me, moved blind`;
+    }
     if (d.kind === "lava" || d.kind === "drowning") {
       // Back to the last place the body stood dry: Baritone swims and climbs; "step back and jump"
       // put a golem back into a flooded pocket five times in a row until it drowned at full health.
@@ -62,7 +107,12 @@ export const selfPreservation: Reflex<Danger> = {
       await p.move("forward", 800, { sprint: true });
       return "on fire: moved";
     }
-    return `hp ${d.hp.toFixed(0)}: took damage with no visible threat (fall/environment?)`;
+    // Hurt with nobody in sight: a fall needs nothing; anything else (ghast, blaze, arrow from the
+    // dark, magic) is best answered by not standing still.
+    if (d.source === "fall" || d.source === "fly_into_wall") return `hp ${d.hp.toFixed(0)}: fall damage, staying put`;
+    const spot = await stepOff(p).catch(() => null);
+    if (!spot) await p.move("backward", 600, { sprint: true, jump: true });
+    return `hp ${d.hp.toFixed(0)}: hurt by ${d.source ?? "something unseen"} with no threat in sight; moved${spot ? ` to ${fmtPos(spot)}` : ""}`;
   },
 };
 
