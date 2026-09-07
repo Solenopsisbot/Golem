@@ -42,7 +42,11 @@ The finish line is the ender dragon. Everything the minds need is a capability, 
 - **Survivable respawns.** Every eval sets `keepInventory` and gives the bot a lit sky-platform spawn, so a death is a retry instead of a strip-and-death-loop at the world spawn.
 - **Honest hazards.** `self_preservation` now reads the damage type and steps off magma, fire, cactus and dragon breath and digs out of a wall, instead of standing on a hot floor until it dies; the body reports the damage source and the mirror and dashboard carry it.
 
-Open: rungs 3-6 (ender pearl, eye, stronghold, dragon), and one finding to design around first: the defensive reflexes (flee, bunker) interrupt sustained offence, which is exactly what a boss fight needs.
+Rungs 3-4 now pass too. The ender pearl (kill endermen, collect a pearl, in a sky arena) and the eye of ender (craft blaze powder, then the eye) both succeed. Getting the pearl added three more reusable harness pieces: armour in a task's `give` is worn, not just bagged, so a bot starts and respawns armoured; arena mobs are placed at fixed ring positions with PersistenceRequired rather than relative to the bot (an `execute at` right after the teleport dropped them outside the walls); and a summon can carry an `hp<N>` token that weakens a mob (a 40-hp enderman teleports the instant it is hit and out-runs a turn-based attacker, so `attack()` times out without landing a kill; at 8 hp one blow kills it). A finding stands: a turn-based mind can't out-react a real-time melee swarm, so combat rungs use a handful of enemies, not a mob.
+
+Rung 5 (stronghold) is close but unsolved. The bot now survives the dive (0 deaths, after a lava/drown/mob death loop earlier) and navigates well: it threw eyes, followed them ~230 blocks, wrote its own descend script and dug down to the portal-room depth. What it can't yet do is finish inside the 40-minute budget: hand-digging and searching for the portal room eats the whole clock before it fills the frames. That needs efficient stronghold traversal, not more setup. Two harness fixes landed on the way: after a `locate` the bot's spawnpoint is set beside the structure (a death no longer strands it hundreds of blocks away), and keepInventory keeps its eyes through deaths.
+
+Open: make stronghold traversal fast enough to finish, and rung 6 (the dragon: crystals then the boss), which is untried.
 
 ## Minds beyond Claude Code
 
