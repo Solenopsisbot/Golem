@@ -29,13 +29,22 @@ const FLOOR_DANGER: Record<string, Danger["kind"]> = {
 const BAD_FOOTING = new Set(["minecraft:magma_block", "minecraft:lava", "minecraft:fire", "minecraft:soul_fire", "minecraft:cactus", "minecraft:sweet_berry_bush", "minecraft:campfire", "minecraft:soul_campfire", "minecraft:wither_rose", "minecraft:powder_snow"]);
 
 /**
- * Walk to the nearest neighbouring block that is safe to stand on: solid floor that is none of the
- * hurting kinds, with two air blocks above. Ring 1 first, then ring 2. Returns where it went, or null.
+ * Walk to the nearest block that is safe to stand on: solid floor that is none of the hurting kinds,
+ * with two air blocks above, searching outward ring by ring. Returns where it went, or null.
+ *
+ * `maxRing` is how far to look. Two blocks is right for stepping off magma or a cactus, where the
+ * hazard is the block underfoot and further is just slower - a ring costs a blockAt for every cell
+ * in it. It is nowhere near enough for something with an area, which is why the callers that are
+ * running from a cloud ask for more.
+ *
+ * Every candidate is floor-checked and reached with goto, which is what makes this safe to widen:
+ * in the End, "just sprint somewhere else" is how a bot walks off the island into the void.
  */
-async function stepOff(p: import("../primitives/index.ts").Primitives): Promise<{ x: number; y: number; z: number } | null> {
+const RINGS = [1, 2, 3, 5, 7];
+async function stepOff(p: import("../primitives/index.ts").Primitives, maxRing = 2): Promise<{ x: number; y: number; z: number } | null> {
   const here = p.ctx.mirror.blockPos;
   const ring = (r: number) => { const out: [number, number][] = []; for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) if (Math.max(Math.abs(dx), Math.abs(dz)) === r) out.push([dx, dz]); return out.sort((a, b) => (Math.abs(a[0]) + Math.abs(a[1])) - (Math.abs(b[0]) + Math.abs(b[1]))); };
-  for (const r of [1, 2]) {
+  for (const r of RINGS.filter((r) => r <= maxRing)) {
     for (const [dx, dz] of ring(r)) {
       for (const dy of [0, 1, -1]) {   // same level first, then a step up or down
         const spot = { x: here.x + dx, y: here.y + dy, z: here.z + dz };
@@ -63,10 +72,40 @@ async function stepOff(p: import("../primitives/index.ts").Primitives): Promise<
  * ground away from it.
  */
 async function escapeCloud(p: import("../primitives/index.ts").Primitives): Promise<string | null> {
-  const clouds = await p.entities({ radius: 10, kinds: ["area_effect_cloud"] }).catch(() => [] as Entity[]);
+  // Radius 16, not 10: a dragon breath cloud measures about 6 from its centre and `entities` gives
+  // the centre, so a cloud swallowing us whole can report as 10-plus blocks away.
+  const clouds = await p.entities({ radius: 16, kinds: ["area_effect_cloud"] }).catch(() => [] as Entity[]);
   if (!clouds.length) return null;
-  const r = await p.flee(clouds.map((c: Entity) => c.pos), 14, { timeoutMs: 10_000 });
-  return `${clouds.length} lingering cloud(s): moved to ${r.pos.x.toFixed(0)},${r.pos.z.toFixed(0)}`;
+  const here = p.ctx.mirror.blockPos;
+  const cx = clouds.reduce((a: number, c: Entity) => a + c.pos.x, 0) / clouds.length;
+  const cz = clouds.reduce((a: number, c: Entity) => a + c.pos.z, 0) / clouds.length;
+  // Straight away from the cloud, and if that is blocked, fan out to either side. Falling back to a
+  // plain "run away" vector is what must NOT happen here: on the End island, away from a cloud near
+  // the fountain points at the rim, and Baritone answers a goal out over the void by walking to the
+  // edge and timing out there. Every candidate below is floor-checked before it is walked to, so a
+  // target hanging in the air is never chosen at all.
+  let dx = here.x - cx, dz = here.z - cz;
+  const len = Math.hypot(dx, dz) || 1;
+  dx /= len; dz /= len;
+  const CLEAR = 9;             // cloud radius is about 6; this leaves daylight around the edge
+  for (const dist of [10, 13, 16]) {
+    for (const turn of [0, Math.PI / 4, -Math.PI / 4, Math.PI / 2, -Math.PI / 2]) {
+      const ux = dx * Math.cos(turn) - dz * Math.sin(turn);
+      const uz = dx * Math.sin(turn) + dz * Math.cos(turn);
+      const spot = { x: Math.round(here.x + ux * dist), y: here.y, z: Math.round(here.z + uz * dist) };
+      if (clouds.some((c: Entity) => Math.hypot(spot.x - c.pos.x, spot.z - c.pos.z) < CLEAR)) continue;
+      const [floor, feet, head] = await Promise.all([
+        p.blockAt({ ...spot, y: spot.y - 1 }), p.blockAt(spot), p.blockAt({ ...spot, y: spot.y + 1 }),
+      ]);
+      if (!floor.solid || BAD_FOOTING.has(floor.id) || !feet.air || !head.air) continue;
+      // Six seconds, not twelve: the reflex re-fires every four, and a long goal that cannot be
+      // reached just stacks moves until the body starts answering RATE_LIMIT.
+      try { await p.goto(spot, { reach: 1, timeoutMs: 6000 }); }
+      catch { continue; }
+      return `${clouds.length} lingering cloud(s): moved to ${fmtPos(spot)}`;
+    }
+  }
+  return null;
 }
 
 export const selfPreservation: Reflex<Danger> = {
@@ -134,7 +173,10 @@ export const selfPreservation: Reflex<Danger> = {
     // Hurt with nobody in sight: a fall needs nothing; anything else (ghast, blaze, arrow from the
     // dark, magic) is best answered by not standing still.
     if (d.source === "fall" || d.source === "fly_into_wall") return `hp ${d.hp.toFixed(0)}: fall damage, staying put`;
-    const spot = await stepOff(p).catch(() => null);
+    // Look well past arm's reach. Whatever is hurting us cannot be seen, so we cannot know how big
+    // it is; the one thing we do know is that standing here costs health. A single sidestep answered
+    // dragon breath with a shuffle and Tester died in the pool three times over.
+    const spot = await stepOff(p, 7).catch(() => null);
     if (!spot) await p.move("backward", 600, { sprint: true, jump: true });
     return `hp ${d.hp.toFixed(0)}: hurt by ${d.source ?? "something unseen"} with no threat in sight; moved${spot ? ` to ${fmtPos(spot)}` : ""}`;
   },

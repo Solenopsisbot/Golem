@@ -96,7 +96,16 @@ export class Drive {
     const chatty = item.kind === "chat" || item.kind === "whisper" || item.kind === "bridge" || item.kind === "goal" || item.kind === "agent";
     // Queueing costs nothing (no cancel), so anything conversational from an addressed player or
     // another agent rides into the running turn; ambient chat waits for the next one.
-    const conversational = this.mind.busy && chatty && item.priority >= 50;
+    // Damage folds into the running turn as well, for a different reason than chat does: it is
+    // information, not an instruction. The reflex layer already answered it in milliseconds - that is
+    // the entire point of reflexes, and they run at a higher priority than the mind regardless of
+    // what it is doing - so cancelling the turn on top of that throws away the thinking and re-asks
+    // the same question of a mind that is still being hit. In a boss fight, where being under 6 hp is
+    // the normal condition rather than an emergency, that is every turn: Tester planned for 90
+    // seconds, was cancelled at hp 6, and made zero tool calls for an entire run. Death still
+    // cancels - after dying the plan is genuinely void, because the world moved out from under it.
+    const foldable = chatty || item.kind === "damage";
+    const conversational = this.mind.busy && foldable && item.priority >= 50;
     if (conversational && a.drive.interrupt_mode === "queue") {
       // Fold the message into the running turn: no cancel, no lost work. It never enters the inbox.
       const it: InboxItem = { id: -1, t: Date.now(), ...item };
