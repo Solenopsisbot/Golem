@@ -49,6 +49,8 @@ export class AgentSession {
     s.rt.shem = shem;
     const shemReflexes = shem.loadReflexes(s.rt.reflexes, agent.reflexes.allow_custom);
     for (const name of agent.reflexes.on) if (shemReflexes.includes(name)) s.rt.reflexes.enable(name);
+    const missing = agent.reflexes.on.filter((n) => !s.rt.reflexes.list().some((r) => r.name === n));
+    if (missing.length) s.log.warn(`unknown reflex in config: ${missing.join(", ")}`);
     const orient = () => writeOrientation({ agent, tools: toolDocs(), shem: { cheatsheet: shem.cheatsheet(), index: shem.list() } });
     orient();
     shem.onSaved = (rel) => { s.log.info(`script saved by tool: ${rel}`); orient(); };

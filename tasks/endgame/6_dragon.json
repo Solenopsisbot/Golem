@@ -1,8 +1,8 @@
 {
   "name": "dragon",
   "description": "Kill the ender dragon in the End. Needs a world whose End still has its dragon: a /summon'ed ender_dragon has no EnderDragonFight controller, so it hovers motionless and never circles, perches or attacks. This rung relies on the real fight, so it must not summon one.",
-  "goal": "You are on the End island with a bow, 320 arrows, a diamond sword, diamond armour and a carved pumpkin already worn. The pumpkin is why endermen ignore you - do NOT take it off. Kill the ender dragon. Start a snippet with `use \"lib/dragon\"`. Use `lead_shot()` to shoot it while it flies: it samples the dragon's velocity and aims where it will be, because a fully drawn arrow takes about a second to cross the island and aiming straight at a circling dragon simply misses. When it comes down to perch on the fountain, hit it with the sword - that is when it takes the most damage. There are no crystals left, so every hit sticks and its health never comes back. You start in an obsidian nook with an open top - stay in it and shoot upward; step out only to melee a perched dragon, then get back in. eat or use a golden apple below half health, and keep each call short. Never dig down here - below the island is the void. Say 'dragon dead' when it dies.",
-  "timeout_s": 3600,
+  "goal": "You are on the End island near the bedrock fountain, wearing diamond armour and a carved pumpkin (the pumpkin is why endermen ignore you - do NOT take it off). Kill the ender dragon.\nThe `dragon_fight` reflex does the actual fighting for you, on the 250ms tick: it heals, breaks contact when it is losing, melees the dragon when it perches and leads it with the bow when it flies. A planning turn takes far longer than the dragon takes to kill you, so swinging is not your job.\nYour job: check the reflex is on (reflex_set dragon_fight on), stay near the fountain so you are in reach when it perches, keep arrows and golden apples to hand, and watch. Expect your own tool calls to be preempted by the reflex - that is it working, not an error. Do not run long scripts that try to fight the dragon yourself; you will only take the body away from the reflex. There are no crystals left, so every hit sticks and its health never comes back. Never dig down here - below the island is the void. Say 'dragon dead' when it is gone.",
+  "timeout_s": 7200,
   "setup": {
     "clear_inventory": true,
     "give": [
@@ -21,13 +21,10 @@
     "dimension": "the_end",
     "commands": [
       "execute in minecraft:the_end run forceload add -32 -32 32 32",
-      "execute in minecraft:the_end run forceload add 32 -32 48 32",
       "execute in minecraft:the_end run kill @e[type=minecraft:enderman]",
       "execute in minecraft:the_end run kill @e[type=minecraft:end_crystal,limit=7]",
-      "execute in minecraft:the_end run fill 37 63 -3 43 66 3 minecraft:obsidian",
-      "execute in minecraft:the_end run fill 38 64 -2 42 66 2 minecraft:air",
-      "execute in minecraft:the_end run tp {bot} 40.5 64 0.5",
-      "execute in minecraft:the_end run spawnpoint {bot} 40 64 0"
+      "execute in minecraft:the_end run tp {bot} 10.5 65 0.5",
+      "execute in minecraft:the_end run spawnpoint {bot} 10 65 0"
     ]
   },
   "success": [

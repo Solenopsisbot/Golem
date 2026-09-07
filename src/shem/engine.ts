@@ -195,7 +195,10 @@ export class ShemEngine {
           description: `${decl.doc.split("\n")[0] || "(shem reflex)"} [${lf.rel}]`,
           priority: decl.priority ?? 50,
           interrupts: (decl.priority ?? 50) >= 60,
-          cooldownMs: 3000,
+          // Urgent reflexes get a short leash. A boss fight lives or dies on how much of each second
+          // the body is actually swinging: at the 3 s default a combat reflex fights for three
+          // seconds in every six, and the dragon heals the gap in initiative if not in health.
+          cooldownMs: (decl.priority ?? 50) >= 90 ? 500 : 3000,
           check: async () => {
             if (decl.event.name === "tick") return (await evalWhen([])) ? [] : null;
             if (!pending) return null;

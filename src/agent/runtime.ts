@@ -59,7 +59,9 @@ export class AgentRuntime {
     });
     for (const r of BUILTIN_REFLEXES) this.reflexes.register(r);
     for (const name of agent.reflexes.on) {
-      try { this.reflexes.enable(name); } catch { this.log.warn(`unknown reflex in config: ${name}`); }
+      // Shem reflexes are not registered yet at construction: AgentSession enables those right after
+      // the engine loads them. So a miss here is only worth a warning if nothing picks it up later.
+      try { this.reflexes.enable(name); } catch { this.log.debug(`reflex ${name} is not built in; if it is a Shem reflex it will be enabled when the engine loads`); }
     }
   }
 

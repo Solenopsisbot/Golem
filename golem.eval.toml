@@ -25,3 +25,8 @@ persona = "personas/clay.md"
 [mind.models.plan]
 model = "opus"
 effort = "high"
+
+# The dragon rung needs a fighter that runs between turns, not just a planner. dragon_fight is off by
+# default (it is only useful in the End); the endgame ladder turns it on.
+[reflexes]
+default_on = ["auto_respawn", "bunker", "self_preservation", "unstuck", "auto_eat", "item_collecting", "idle_staring", "dragon_fight"]
