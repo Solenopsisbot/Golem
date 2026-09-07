@@ -1,0 +1,14 @@
+{
+  "name": "dig_down_smoke",
+  "description": "Smoke-test the dig_down primitive: sink 15 blocks and report.",
+  "goal": "Run exactly one short snippet and nothing else: `let r = dig_down(15)` then `say(\"dug ${r.dug} stopped ${r.stopped} at ${here}\")`. Do not write a script file, do not dig a staircase.",
+  "timeout_s": 300,
+  "setup": {
+    "time": "day",
+    "clear_inventory": true,
+    "give": ["diamond_pickaxe", "cobblestone 32", "cooked_beef 8"],
+    "spread": [110, 100, 40]
+  },
+  "success": [{ "type": "said", "includes": "dug" }],
+  "tags": ["basic"]
+}

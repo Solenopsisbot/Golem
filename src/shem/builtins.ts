@@ -74,7 +74,7 @@ export const BUILTINS: BuiltinSpec[] = [
   { name: "surface", params: [p("timeout", "dur", "none")], returns: "int", doc: "Dig and climb to open sky from wherever you are (buried, in a cave). Returns the y you ended at. Fails if it can't get there in time.", blocking: true },
   { name: "explore", params: [p("for", "dur", "none")], returns: "none", doc: "Baritone explore. explore(for: 2m) blocks that long then stops; without `for` it returns at once and runs until stop().", blocking: true },
   { name: "goto_surface", params: [], returns: "record", doc: "Climb to the surface: .y .rose. Fails with `unreachable` when sealed in.", blocking: true },
-  { name: "dig_down", params: [p("n", "int")], returns: "none", doc: "Dig straight down n blocks, checking for lava and air below.", blocking: true, stub: true },
+  { name: "dig_down", params: [p("n", "int"), p("max_drop", "int", "3")], returns: "record", doc: "Sink straight down n blocks, one swing per block. Fast way to depth (a staircase costs 3 mines and a path-find per block). Looks before every swing and STOPS rather than dying: .dug .stopped .pos — `stopped` is \"done\", or why it halted (lava below, a long drop, stuck).", blocking: true },
   { name: "tunnel", params: [p("dir", "string"), p("n", "int")], returns: "none", doc: "Tunnel n blocks in a direction.", blocking: true, stub: true },
 
   // ---- actions ---------------------------------------------------------------------

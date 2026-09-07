@@ -1,7 +1,7 @@
 {
   "name": "stronghold",
   "description": "Follow eyes of ender to a stronghold, find the portal room, fill the frame, enter the End.",
-  "goal": "You have 14 eyes of ender and there is a stronghold within a few hundred blocks. Throw an eye (use_item while holding it), watch where it flies with find_entities, and walk that way; when an eye drops down where you stand, dig down carefully (never straight down without checking) to the stronghold. Find the end portal room, put an eye in each of the 12 frames that lacks one, and jump in. Say 'in the end' when you are.",
+  "goal": "You are near a stronghold with eyes of ender, a diamond pickaxe, armour and food. The standard library already has this whole route, so use it instead of writing your own digger: start a snippet with `use \"lib/ender\"`, then (1) `follow_eyes()` if you still need to find the stronghold - skip it if an eye already drops straight down where you stand; (2) `dive_for_portal()` repeatedly - it sinks a bounded distance with `dig_down` and scans 64 blocks for the portal frames every few blocks, and returns `.found`, `.sunk` and `.stopped`; (3) `fill_portal()` to put an eye in every empty frame; (4) `enter_end()` to step onto the portal. Keep every call short and read the result between calls rather than running one long script. Do NOT cut a staircase down - `dig_down` is implemented, safe, and about four times faster. Say 'in the end' once you are there.",
   "timeout_s": 2400,
   "setup": {
     "time": "day",

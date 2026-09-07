@@ -128,6 +128,7 @@ export function makeShemHost(rt: AgentRuntime): Host {
   def("surface", async (p, a, n) => { const d = arg(a, n, 0, "timeout"); const r = await p.surface({ timeoutMs: d == null ? undefined : toDur(d) }); return r.y; });
   def("explore", async (p, a, n) => { const d = arg(a, n, 0, "for"); await p.explore(d == null ? undefined : toDur(d)); return null; });
   def("goto_surface", async (p) => { const r = await p.surface(); return { y: r.y, rose: r.rose }; });
+  def("dig_down", async (p, a, n) => { const r = await p.digDown(toNum(arg(a, n, 0, "n") ?? 1), { maxDrop: toNum(arg(a, n, 1, "max_drop") ?? 3) }); return { dug: r.dug, stopped: r.stopped, pos: new Vec3(r.pos.x, r.pos.y, r.pos.z, false) }; });
 
   // ---- actions ----
   def("mine", async (p, a, n) => { const r = await p.mine(posOf(arg(a, n, 0, "pos") ?? null), { collect: arg(a, n, 1, "collect") !== false }); return { broken: r.broken, block: r.block, ms: r.ms }; });

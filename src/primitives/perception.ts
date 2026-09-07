@@ -8,6 +8,12 @@ import { inventory } from "./inventory.ts";
 export interface Block { id: string; short: string; air: boolean; solid: boolean; liquid: boolean; pos: Pos }
 
 const LIQUIDS = new Set(["minecraft:water", "minecraft:lava"]);
+/**
+ * Blocks you walk *through* rather than into. They are not air and not liquid, so the naive test
+ * calls them solid — which makes `goto` bump its reach and stop the body politely beside the portal
+ * instead of in it, and then the portal never fires. Standing in one is the whole point.
+ */
+const PASSABLE = new Set(["minecraft:nether_portal", "minecraft:end_portal", "minecraft:end_gateway"]);
 /** Blocks a placement may overwrite (vanilla "replaceable" is longer; these are the common ones). */
 export const REPLACEABLE = new Set([
   "minecraft:air", "minecraft:cave_air", "minecraft:void_air", "minecraft:water", "minecraft:lava",
@@ -21,7 +27,7 @@ export async function blockAt(ctx: Ctx, p: Pos): Promise<Block> {
   try { r = (await ctx.body.call("blockAt", { x: p.x, y: p.y, z: p.z })) as BlockAtResult; }
   catch (e) { throw fromClef(e, `blockAt ${fmtPos(p)}`); }
   const liquid = LIQUIDS.has(r.block);
-  return { id: r.block, short: shortId(r.block), air: r.air, liquid, solid: !r.air && !liquid && !REPLACEABLE.has(r.block), pos: p };
+  return { id: r.block, short: shortId(r.block), air: r.air, liquid, solid: !r.air && !liquid && !REPLACEABLE.has(r.block) && !PASSABLE.has(r.block), pos: p };
 }
 
 export interface FindBlocksOpts { radius?: number; max?: number }

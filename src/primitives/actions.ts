@@ -25,6 +25,60 @@ async function approach(ctx: Ctx, p: Pos, reach = 3, timeoutMs = 30_000): Promis
   }
 }
 
+export interface DigDownOpts { maxDrop?: number; timeoutMs?: number }
+export interface DigDownResult { dug: number; stopped: string; pos: Pos }
+
+/**
+ * Sink straight down `n` blocks, one swing per block, letting gravity do the moving.
+ *
+ * This is the fast way to depth: a staircase costs three mines and a path-find per block of descent,
+ * where this costs one mine. It is also the classic way to die, so it looks before every swing and
+ * stops (rather than throwing) when going further would be stupid: lava or water in the next two
+ * blocks, or an open drop longer than `maxDrop`. The caller gets back how far it got and why it
+ * stopped, so a script can scan and decide whether to keep going.
+ */
+export async function digDown(ctx: Ctx, n: number, opts: DigDownOpts = {}): Promise<DigDownResult> {
+  const maxDrop = opts.maxDrop ?? 3;
+  const timeoutMs = opts.timeoutMs ?? 180_000;
+  const t0 = Date.now();
+  return ctx.activity.run(`dig down ${n}`, async () => {
+    const startY = ctx.mirror.blockPos.y;
+    let dug = 0;
+    const done = (stopped: string): DigDownResult => ({ dug, stopped, pos: ctx.mirror.blockPos });
+    while (startY - ctx.mirror.blockPos.y < n) {
+      ctx.token.throwIfCancelled();
+      if (Date.now() - t0 > timeoutMs) return done("timeout");
+      const from = ctx.mirror.blockPos;
+      const [below, below2] = await Promise.all([
+        blockAt(ctx, { x: from.x, y: from.y - 1, z: from.z }),
+        blockAt(ctx, { x: from.x, y: from.y - 2, z: from.z }),
+      ]);
+      if (below.liquid) return done(`${below.short} directly below`);
+      if (below2.liquid) return done(`${below2.short} two blocks below`);
+      if (below.air) {
+        // Already standing over a hole: measure it before dropping in.
+        let depth = 1;
+        while (depth <= maxDrop) {
+          const b = await blockAt(ctx, { x: from.x, y: from.y - 1 - depth, z: from.z });
+          if (!b.air) break;
+          if (b.liquid) return done(`${b.short} ${depth + 1} blocks below`);
+          depth++;
+        }
+        if (depth > maxDrop) return done(`a drop of more than ${maxDrop} blocks below`);
+      } else {
+        try { await mine(ctx, { x: from.x, y: from.y - 1, z: from.z }, { collect: false }); }
+        catch (e) { return done(`could not break ${below.short}: ${(e as Error).message}`); }
+        dug++;
+      }
+      // Wait for the fall into the space we just opened; if we are still up here, we are stuck on
+      // something the mirror has not caught up with, so give up rather than swing at air forever.
+      const fell = await until(() => ctx.mirror.blockPos.y < from.y, { timeoutMs: 4000, intervalMs: 80, what: "falling", token: ctx.token }).catch(() => false);
+      if (!fell) return done(`stuck at ${fmtPos(from)}`);
+    }
+    return done("done");
+  });
+}
+
 export interface MineOpts { timeoutMs?: number; tool?: "auto" | "none"; approach?: boolean; /** walk over the drop afterwards (default true) */ collect?: boolean }
 
 /** Break one block. Resolves when it is air (and, by default, after walking over its drop). Picks the best tool from the inventory. */

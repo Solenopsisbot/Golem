@@ -17,3 +17,11 @@ owners = ["owner"]            # the eval runner sends goals as this player
 [[agents]]
 name = "Tester"
 persona = "personas/clay.md"
+
+# Eval-only model routing. The default fleet routes planning turns to Fable; when that model's
+# usage limit is exhausted every planning turn errors out and a long rung degrades into act-only
+# turns. Evals need to be reproducible more than they need the cheaper planner, so they plan on
+# opus too. The live fleet's routing (golem.toml) is unaffected.
+[mind.models.plan]
+model = "opus"
+effort = "high"

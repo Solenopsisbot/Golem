@@ -22,7 +22,7 @@ script throw_eye(): vec {
 }
 
 /// Throw eyes and walk the way they fly until one drops where you stand. Returns that spot.
-script follow_eyes(max_throws: int = 12, step: int = 160): pos {
+script follow_eyes(max_throws: int = 8, step: int = 140): pos {
   let throws = 0
   while (throws < max_throws) {
     let v = throw_eye()
@@ -37,13 +37,52 @@ script follow_eyes(max_throws: int = 12, step: int = 160): pos {
     let tx = here.x + v.x / m * step
     let tz = here.z + v.z / m * step
     log "eye flew (${round(v.x)}, ${round(v.z)}); walking ${step} blocks that way to (${int(tx)}, ${int(tz)})"
-    try { timeout 4m { goto_xz(tx, tz, reach: 3) } } catch (e) { log "walk: ${e.kind} ${e.message}" }
+    try { timeout 2m { goto_xz(tx, tz, reach: 3) } } catch (e) { log "walk: ${e.kind} ${e.message}" }
   }
   fail "no stronghold found after ${max_throws} eyes"
 }
 
-/// Dig a staircase down, never straight down: each step is one block along and one down, and the
-/// block under the next step is checked for lava or a hole first. Returns where you stopped.
+/// Sink toward the stronghold, scanning for the portal room every few blocks.
+///
+/// The scan is the whole point: `find_blocks` reaches 64 blocks, so the frames usually show up long
+/// before you are standing in them. Descent is `dig_down`, which costs one swing per block and stops
+/// itself at lava or a long drop; the old staircase cost three mines and a path-find per block, which
+/// is how a stronghold dive burns forty minutes and never arrives.
+///
+/// Bounded work per call on purpose: it comes back after `max_blocks` so the mind keeps its turn and
+/// can look around. Call it again to keep going. Returns `.found .pos .sunk .stopped`.
+script dive_for_portal(max_blocks: int = 30, scan_every: int = 6): record {
+  let sunk = 0
+  while (sunk < max_blocks && here.y > 4) {
+    let frames = find_blocks("end_portal_frame", radius: 64, max: 4)
+    if (frames.length > 0) {
+      let f = frames.first
+      log "portal frames at ${f.pos}, ${int(f.dist)} blocks off"
+      remember("end_portal", f.pos, note: "end portal room")
+      try { goto(f.pos, reach: 3, timeout: 3m) } catch (e) { log "approach: ${e.kind} ${e.message}" }
+      return { found: true, pos: f.pos, sunk: sunk, stopped: "found" }
+    }
+    let d = dig_down(scan_every)
+    sunk = sunk + d.dug
+    if (d.stopped != "done") {
+      log "dig stopped: ${d.stopped} at ${here}"
+      return { found: false, pos: here, sunk: sunk, stopped: d.stopped }
+    }
+  }
+  let last = find_blocks("end_portal_frame", radius: 64, max: 4)
+  if (last.length > 0) {
+    let f = last.first
+    remember("end_portal", f.pos, note: "end portal room")
+    try { goto(f.pos, reach: 3, timeout: 3m) } catch (e) { log "approach: ${e.kind} ${e.message}" }
+    return { found: true, pos: f.pos, sunk: sunk, stopped: "found" }
+  }
+  return { found: false, pos: here, sunk: sunk, stopped: "budget" }
+}
+
+/// Cut a walkable staircase down: each step is one block along and one down, checking the block under
+/// the next step for lava or a hole first. Use this when you want a ramp you can walk back up.
+/// To simply GET DEEP, use `dive_for_portal` or `dig_down` — a staircase costs three mines and a
+/// path-find per block, which is roughly four times the work. Returns where you stopped.
 script stairs_down(n: int = 20, dir: string = "east"): pos {
   let sx = 0
   let sz = 0
@@ -126,13 +165,17 @@ script fill_portal(): int {
   return placed
 }
 
-/// Walk onto the end portal and wait to arrive.
+/// Walk into the end portal and wait to arrive. Tries each portal block in turn: pathing can stop a
+/// block short of one, and a portal only fires when you are actually standing in it.
 script enter_end(): string {
   let portal = find_blocks("end_portal", radius: 32, max: 9)
-  if (portal.empty) fail "no end_portal block: all 12 frames need an eye first"
-  goto(portal.first.pos, reach: 0, timeout: 60s)
-  wait until dimension == "the_end" timeout 20s else { fail "stood on the portal but did not go" }
-  wait 4s
-  log "in the End at ${here}"
-  return dimension
+  if (portal.length == 0) fail "no end_portal block: every frame needs an eye first"
+  for (b of portal) {
+    try { goto(b.pos, reach: 0, timeout: 60s) } catch (e) { log "onto ${b.pos}: ${e.kind} ${e.message}"; continue }
+    wait until dimension == "the_end" timeout 8s else { log "stood at ${b.pos}, no portal yet"; continue }
+    wait 4s
+    log "in the End at ${here}"
+    return dimension
+  }
+  fail "stood in ${portal.length} portal block(s) and never changed dimension"
 }
