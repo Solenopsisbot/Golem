@@ -102,8 +102,21 @@ async function callLlm(cfg: Cfg, system: string, msgs: Msg[], tools: Tool[], sig
     };
   }
   if (DEBUG) log("->", url, JSON.stringify(body).length, "bytes,", msgs.length, "msgs");
-  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal });
-  if (!res.ok) throw new Error(`${cfg.wire} ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const payload = JSON.stringify(body);
+  let res!: Response;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(url, { method: "POST", headers, body: payload, signal });
+    if (res.ok) break;
+    // Back off on rate limits and transient server errors; honour Retry-After when given.
+    if ((res.status === 429 || res.status >= 500) && attempt < 5) {
+      const ra = Number(res.headers.get("retry-after"));
+      const waitMs = Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(1000 * 2 ** attempt, 30_000);
+      log(`${res.status} from endpoint; retrying in ${Math.round(waitMs / 1000)}s (attempt ${attempt + 1}/5)`);
+      await new Promise((r) => setTimeout(r, waitMs));
+      continue;
+    }
+    throw new Error(`${cfg.wire} ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  }
   const json = await res.json() as Record<string, any>;
   return cfg.wire === "anthropic" ? parseAnthropic(json) : cfg.wire === "responses" ? parseResponses(json) : parseChat(json);
 }
@@ -222,7 +235,9 @@ async function main(): Promise<void> {
           const reply = await callLlm(cfg, s.system, s.history, s.tools, s.abort.signal);
           if (reply.usage) usage = { totalTokens: reply.usage.input, cachedReadTokens: reply.usage.cached } as acp.Usage;
           if (reply.text) await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: reply.text } } });
-          s.history.push({ role: "assistant", content: reply.text, toolCalls: reply.toolCalls });
+          // Only keep an assistant turn that actually said or did something: an empty assistant message
+          // (no content, no tool calls) is rejected by the OpenAI wire on the next request.
+          if (reply.text || reply.toolCalls.length) s.history.push({ role: "assistant", content: reply.text, toolCalls: reply.toolCalls });
           if (!reply.toolCalls.length) return { stopReason: "end_turn", usage: usage ?? undefined } as acp.PromptResponse;
           for (const call of reply.toolCalls) {
             await conn.sessionUpdate({ sessionId: params.sessionId, update: { sessionUpdate: "tool_call", toolCallId: call.id, title: call.name, status: "in_progress", kind: "other" } as acp.SessionUpdate });

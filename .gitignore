@@ -9,3 +9,4 @@ data/
 golem.toml
 golem.codex.test.toml
 golem.llm.test.toml
+golem.logfare.toml

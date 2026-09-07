@@ -50,6 +50,39 @@ GOLEM_CODEX_MODEL = "your-model-id"
 The endpoint must implement the OpenAI **Responses** API. `codex --oss` (with `--local-provider
 ollama|lmstudio`) covers local models.
 
+## OpenAI Chat Completions through the Codex harness (proxy)
+
+If you want the *full Codex harness* -- its file edits, shell and MCP tools -- in front of a
+Chat-Completions-only endpoint like Logfare, run `adapters/openai-responses-proxy.mjs`. It accepts
+the OpenAI Responses API that Codex speaks and translates every request (and the streaming SSE
+reply, including tool calls and usage) to and from Chat Completions, forwarding your key straight
+through.
+
+```bash
+UPSTREAM_BASE="https://logfare.ai/v1" PROXY_PORT=8788 PROXY_MODEL=glm-5.3 \
+  node adapters/openai-responses-proxy.mjs
+```
+
+Point Codex's isolated `CODEX_HOME` config at it:
+
+```toml
+# data/codex-home/config.toml
+model = "glm-5.3"
+model_provider = "logfare"
+
+[model_providers.logfare]
+name = "Logfare"
+base_url = "http://127.0.0.1:8788/v1"
+wire_api = "responses"
+env_key = "LOGFARE_API_KEY"
+```
+
+Then run the Codex mind (`adapters/codex-acp.ts`) with `CODEX_HOME` set, `GOLEM_CODEX_MODEL=glm-5.3`,
+`GOLEM_CODEX_PROVIDER=logfare`, and `LOGFARE_API_KEY` in the environment. The whole chain is
+Golem -> codex-acp -> codex app-server -> proxy -> your endpoint, and Codex behaves exactly as it
+does on its own models. Verified end to end with glm-5.3 on Logfare (tool calls stream through and
+execute); throughput depends on your endpoint's rate limit and speed.
+
 ## Any endpoint, any wire -> adapters/llm-acp.ts
 
 `adapters/llm-acp.ts` is a Golem-owned ACP mind that owns the agent loop: it reads the workspace
