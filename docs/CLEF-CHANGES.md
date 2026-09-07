@@ -124,6 +124,41 @@ Baritone's first `BlockOptionalMeta` builds a stub server level to run loot tabl
 ### 15. `batch`
 `batch {commands:[{cmd,args}]}` executed in order on the main thread, returning an array of results. Cuts round-trips for inventory manipulation sequences.
 
+### 19. A combat control loop: `shootAt`, `meleeWhile` (measured, 2026-09-07)
+
+The one gap the ender dragon cannot be beaten around. Everything else on this list is "the client knows
+this but doesn't expose it"; this is "the loop is running at the wrong end of the wire".
+
+Aiming a bow over the WebSocket costs four round-trips — sample the target, `useHold`, re-sample,
+`lookAt`, `useRelease` — about **1.5 s per arrow**. An ender dragon covers roughly twenty blocks in that
+time, so the arrow is loosed at where the target used to be. Measured on a real fight: hundreds of
+arrows, 54 spent shafts on the ground at once, and the dragon's health moving three points in ten
+minutes. Fixing Golem-side ballistics (the drop was compensated at about half its real value; a
+Minecraft arrow falls at 20 blocks/s², so it drops 10·t² over flight time t) restarted damage, which is
+the tell — ballistics was the only error latency could not hide. The rest is latency, and no amount of
+Shem tuning fixes a 1.5 s control loop against a 20 Hz target.
+
+The client already has every piece: entity velocity per tick, the player's rotation, and the draw
+progress. It just needs to own the loop, exactly as Baritone owns pathfinding.
+
+```
+shootAt {entityId: int, lead?: bool=true, charge?: int=25, shots?: int=1, maxRange?: double=64}
+  -> {fired: int, hits?: int}
+      Draws, tracks the entity every tick, solves lead from its actual velocity and drop from
+      10*t^2 with t = distance/53, sets rotation on the release tick, looses. Repeats for `shots`.
+      NOT_FOUND if the entity goes away, MISSING_ITEM without a bow/arrows.
+
+meleeWhile {entityId: int, maxMs?: int=5000, reach?: double=3.5, stopBelowHealth?: double}
+  -> {hits: int, killed: bool, stopped: "dead"|"gone"|"timeout"|"health"}
+      Swings on the attack-cooldown cadence while the target is in reach, facing it each tick.
+      For a multi-part entity (the dragon) resolve the part under the crosshair, since the parent
+      entity ignores damage — `/damage` on an ender_dragon reports "Applied" and changes nothing.
+```
+
+Both should honour `pause`/`cancel` so a reflex can take the body back. With these, the split is the one
+that already works for movement: the mind decides *fight that*, a reflex decides *it has perched, melee*,
+and the body does the 20 Hz work.
+
 ## What Baritone already covers (no Clef change needed)
 
 Verified against the bundled Baritone 1.15.0 jar: `axis blacklist build click come eta elytra explore explorefilter farm find follow forcecancel gc goal goto help invert litematica mine path pickup proc reloadall render repack saveall schematica sel set surface thisway tunnel version waypoints`.
@@ -144,7 +179,7 @@ Verified against the bundled Baritone 1.15.0 jar: `axis blacklist build click co
 | stop | `cancel`, `forcecancel` | `met` |
 | list positions of a block kind | `find <block>` | output invisible until #16 |
 
-Not covered by Baritone at all: crafting (#2), richer status and entities (#4, #5), events (#7, #8), crosshair target (#6), region dumps (#1 `blocksIn`), screenshot extras (#12).
+Not covered by Baritone at all: crafting (#2), richer status and entities (#4, #5), events (#7, #8), crosshair target (#6), region dumps (#1 `blocksIn`), screenshot extras (#12), and combat aiming (#19) — Baritone paths and mines, it does not fight.
 
 ## Feedback on the protocol-2 build (live, 2026-09-06)
 

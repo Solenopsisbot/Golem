@@ -99,7 +99,8 @@ Also worth naming: the rung's scaffolding drifted a long way (weakened mobs, an 
 fountain-side placement, most crystals pre-killed). That is fixture design turning into doing the
 agent's job for it, and it should be stripped back once the body can aim.
 
-Open: a Clef-side aiming/melee loop; then rung 6 with the scaffolding removed.
+Open: a Clef-side aiming/melee loop (written up as CLEF-CHANGES #19 `shootAt`/`meleeWhile`); then rung 6
+with the scaffolding removed.
 
 ## Minds beyond Claude Code
 
