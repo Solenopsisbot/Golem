@@ -104,6 +104,9 @@ export class EvalRunner {
         log.info(`located ${s.locate.structure} at ${x},${z}; teleporting`);
         await run(`execute ${dim ? `in ${dim} ` : ""}run tp ${bot} ${x} ${s.locate.y} ${z}`);
       }
+      // Respawn where it started, next to the structure, not at the far sky platform: a death diving
+      // a stronghold otherwise strands the bot hundreds of blocks away with no way back.
+      await run(`execute at ${bot} run spawnpoint ${bot} ~ ~ ~`);
     } else if (dim === "minecraft:the_end") {
       await run(`execute in ${dim} run spreadplayers 0 0 5 60 false ${bot}`);   // safe ground on the main island
     } else if (dim) {
