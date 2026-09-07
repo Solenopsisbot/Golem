@@ -23,7 +23,7 @@
     "golem": "node src/cli/golem.ts",
     "gen:body": "node scripts/gen-body-types.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --test 'src/**/*.test.ts'",
+    "test": "node --test 'src/**/*.test.ts' 'adapters/**/*.test.ts'",
     "gen:tools": "node scripts/gen-tool-docs.ts",
     "check:shem": "node scripts/shem-check.ts"
   },

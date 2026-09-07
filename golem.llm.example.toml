@@ -1,0 +1,32 @@
+# Run any OpenAI/Anthropic-compatible endpoint as a mind, via adapters/llm-acp.ts.
+# Copy to golem.<name>.toml, put secrets in .env (gitignored), point GOLEM_LLM_KEY_ENV at the key's var.
+[fleet]
+name = "llm"
+data_dir = "./data"
+mcp_bind = "127.0.0.1:8770"
+
+[clef]
+launcher = "../MezzoSopranoClef/launcher/build/libs/mezzosopranoclef-launcher-0.1.0.jar"
+server = "127.0.0.1:25566"
+auth = "offline"
+base_port = 9731
+max_heap = "1024m"
+
+[mind]
+command = "node"
+args = ["adapters/llm-acp.ts"]
+permission_mode = "default"
+[mind.env]
+GOLEM_LLM_WIRE = "chat"                    # chat | responses | anthropic
+GOLEM_LLM_BASE_URL = "https://logfare.ai/v1"
+GOLEM_LLM_MODEL = "your-model-id"
+GOLEM_LLM_KEY_ENV = "LOGFARE_API_KEY"      # name of the .env var holding the key (or GOLEM_LLM_API_KEY directly)
+# GOLEM_LLM_HEADERS = "{\"X-Org\":\"foo\"}"
+# GOLEM_LLM_MAX_STEPS = "16"
+
+[players]
+owners = ["YourMinecraftName"]
+
+[[agents]]
+name = "Clay"
+persona = "personas/clay.md"

@@ -41,3 +41,5 @@ The finish line is the ender dragon. Everything the minds need is a capability, 
 ## Minds beyond Claude Code
 
 `adapters/codex-acp.ts` is a Golem-owned ACP adapter over `codex app-server`, so OpenAI Codex (the installed CLI, any model it supports including gpt-6-astra) can be the mind. Proven end to end: session, MCP tools, streaming, chat. The ACP client in `src/mind/acp.ts` is unchanged; a mind is just a `command`/`args` in config.
+
+`adapters/llm-acp.ts` runs any OpenAI/Anthropic-compatible endpoint as a mind (chat, responses or anthropic wire), so Logfare and other Chat-Completions gateways are first-class. It connects to Golem's MCP server as a client and drives its own tool-calling loop.

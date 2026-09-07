@@ -50,20 +50,30 @@ GOLEM_CODEX_MODEL = "your-model-id"
 The endpoint must implement the OpenAI **Responses** API. `codex --oss` (with `--local-provider
 ollama|lmstudio`) covers local models.
 
-## OpenAI Chat Completions endpoint (Logfare, OpenRouter, vLLM, most gateways)
+## Any endpoint, any wire -> adapters/llm-acp.ts
 
-Neither shipped harness fits this directly: Claude Code wants Anthropic Messages, and this Codex
-wants the Responses API, not Chat Completions. Three ways to close it, in order of preference:
+`adapters/llm-acp.ts` is a Golem-owned ACP mind that owns the agent loop: it reads the workspace
+`AGENTS.md` as its system prompt, connects to Golem's MCP server as a client to get and call the
+tools, and drives a tool-calling loop against a configured HTTP endpoint. It speaks three wires, so
+any endpoint works on whichever protocol it implements, including plain OpenAI Chat Completions
+(Logfare, OpenRouter, vLLM, ollama) that neither CLI harness accepts.
 
-1. **A Chat-Completions ACP adapter (not yet built).** The same shape as `adapters/codex-acp.ts`:
-   a small ACP agent that runs its own tool-calling loop against `POST /v1/chat/completions`, exposes
-   Golem's MCP tools as OpenAI function tools, and streams the reply back. This is the direct way to
-   use Logfare (or any OpenAI-compatible endpoint) as a mind, and Golem would own it end to end.
-2. **A translating proxy.** Put a Chat-Completions -> Responses (or -> Anthropic Messages) shim in
-   front of your endpoint, then use the Codex or Claude path above. No Golem code, but another moving
-   part to run.
-3. **opencode.** It speaks Chat Completions to many providers natively; usable as a mind if it
-   exposes an ACP server. Heavier dependency, and its ACP support is unconfirmed here.
+`golem.llm.example.toml` is the template. Configure it entirely through `mind.env`:
 
-The recommendation is (1) when you want Logfare as a first-class mind: it is the least infrastructure
-and keeps everything inside Golem.
+```toml
+[mind]
+command = "node"
+args = ["adapters/llm-acp.ts"]
+[mind.env]
+GOLEM_LLM_WIRE = "chat"                 # chat (OpenAI Chat Completions) | responses (OpenAI Responses) | anthropic (Anthropic Messages)
+GOLEM_LLM_BASE_URL = "https://logfare.ai/v1"
+GOLEM_LLM_MODEL = "your-model-id"
+GOLEM_LLM_KEY_ENV = "LOGFARE_API_KEY"   # the name of the .env var holding the key; or GOLEM_LLM_API_KEY directly
+# GOLEM_LLM_HEADERS = "{\"X-Org\":\"foo\"}"   GOLEM_LLM_MAX_STEPS = "16"   GOLEM_LLM_MAX_TOKENS = "4096"
+```
+
+The key is read from the named env var, which the adapter also loads from the nearest `.env`
+(gitignored) walking up from the workspace, so no secret goes in a tracked config. Because the wire
+is a setting, you can point this at Codex's endpoint with `anthropic`, or an Anthropic model with
+`chat` if a gateway translates, in any combination. `look_around` -> tool execution -> reply is
+tested end to end on the chat wire; all three wire serialisers have unit tests.
