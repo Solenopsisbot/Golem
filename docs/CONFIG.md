@@ -110,3 +110,7 @@ back, and auto-accepts codex's tool-consent elicitations and approvals. It needs
 plus a symlinked `auth.json`) to keep your global model default and skills out of the fleet;
 `GOLEM_CODEX_MODEL`/`GOLEM_CODEX_EFFORT` seed the first turn. Reasoning effort is a live ACP config
 option, so two-tier routing switches it per turn. Tested end to end on gpt-5.5 and gpt-6-astra.
+
+## Custom LLM endpoints
+
+Pointing a mind at a custom endpoint (a gateway, a self-hosted model, Logfare) depends on the wire protocol it speaks. See `docs/ENDPOINTS.md`: Anthropic Messages endpoints go through Claude Code env vars, OpenAI Responses endpoints through a Codex `model_providers` block plus `GOLEM_CODEX_PROVIDER`, and plain OpenAI Chat Completions endpoints need a small dedicated adapter (planned).

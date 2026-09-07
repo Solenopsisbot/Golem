@@ -95,7 +95,7 @@ async function main(): Promise<void> {
   }>();
   let models: string[] = [];
   let currentModel = "";
-  const cfg = { model: process.env.GOLEM_CODEX_MODEL || "", effort: process.env.GOLEM_CODEX_EFFORT || "low", mode: "full-access" };
+  const cfg = { model: process.env.GOLEM_CODEX_MODEL || "", effort: process.env.GOLEM_CODEX_EFFORT || "low", mode: "full-access", provider: process.env.GOLEM_CODEX_PROVIDER || "" };
 
   // codex handshake
   await rpc.request("initialize", { clientInfo: { name: "golem-codex-acp", version: "0.1.0" }, capabilities: {} });
@@ -205,18 +205,19 @@ async function main(): Promise<void> {
     async newSession(params: acp.NewSessionRequest): Promise<acp.NewSessionResponse> {
       const mcp = configFromMcp(params.mcpServers ?? []);
       const res = await rpc.request<{ thread?: { id?: string }; threadId?: string }>("thread/start", {
-        model: currentModel || undefined, cwd: params.cwd, sandbox: cfg.mode === "read-only" ? "read-only" : "danger-full-access",
+        model: currentModel || undefined, modelProvider: cfg.provider || undefined,
+        cwd: params.cwd, sandbox: cfg.mode === "read-only" ? "read-only" : "danger-full-access",
         config: mcp,
       });
       const id = res.thread?.id ?? res.threadId;
       if (!id) throw new Error("thread/start returned no thread id");
       threads.set(id, { model: currentModel, effort: cfg.effort, mode: cfg.mode, text: "", usage: null, waiter: null, turnId: null, streamed: false });
-      log(`session ${id} model=${currentModel} effort=${cfg.effort} mode=${cfg.mode} mcp=${Object.keys((mcp as any).mcp_servers ?? {}).join(",") || "none"}`);
+      log(`session ${id} model=${currentModel}${cfg.provider ? " provider=" + cfg.provider : ""} effort=${cfg.effort} mode=${cfg.mode} mcp=${Object.keys((mcp as any).mcp_servers ?? {}).join(",") || "none"}`);
       return { sessionId: id, configOptions: [modelSelect(), effortSelect()], modes: modeState(cfg.mode) } as acp.NewSessionResponse;
     },
     async loadSession(params: acp.LoadSessionRequest): Promise<acp.LoadSessionResponse> {
       const mcp = configFromMcp(params.mcpServers ?? []);
-      try { await rpc.request("thread/resume", { threadId: params.sessionId, model: currentModel || undefined, cwd: params.cwd, sandbox: cfg.mode === "read-only" ? "read-only" : "danger-full-access", config: mcp }); }
+      try { await rpc.request("thread/resume", { threadId: params.sessionId, model: currentModel || undefined, modelProvider: cfg.provider || undefined, cwd: params.cwd, sandbox: cfg.mode === "read-only" ? "read-only" : "danger-full-access", config: mcp }); }
       catch (e) { log("thread/resume failed:", (e as Error).message); throw e; }
       if (!threads.has(params.sessionId)) threads.set(params.sessionId, { model: currentModel, effort: cfg.effort, mode: cfg.mode, text: "", usage: null, waiter: null, turnId: null, streamed: false });
       return { modes: modeState(cfg.mode), configOptions: [modelSelect(), effortSelect()] } as acp.LoadSessionResponse;
