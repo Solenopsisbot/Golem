@@ -66,7 +66,23 @@ regenerated one). The attempt did surface a real capability gap worth fixing fir
 the target not at all, so against anything that moves the arrows simply miss - 240 arrows put 2.5 damage
 on a dragon. Bow work (sample velocity, predict arrow flight) is the prerequisite for a boss fight.
 
-Open: lead-predicting bow aim, and rung 6 against a real dragon.
+Rung 6 has now been run against a real dragon and still fails, for a reason worth stating plainly.
+The End was regenerated locally and the fight state reset (level.dat `DragonKilled` and
+`PreviouslyKilled` cleared, `NeedsStateScanning` set), which produces a genuine fight-controlled
+dragon - verified flying y66-96 across twelve positions in thirty seconds, unlike a `/summon`ed one,
+which sits at exactly y=80.0 for a minute and never circles, perches or attacks. `lead_shot` was added
+and does land hits where the old fixed-lift aim landed none. But the bot dies faster than it damages:
+six deaths and 200 -> 197 hp, with keepInventory, an obsidian firing nook to respawn into, no healing
+crystals left, and every hit sticking permanently.
+
+So the blocker is not aim, gear, terrain or recovery any more - it is that a mind whose turn takes
+15-45 seconds cannot trade with a boss that kills it in two hits. The same ceiling showed up on rung 3,
+where four endermen swarm-killed the bot before a single turn could land, and it is why the combat
+rungs use a handful of weakened enemies. Beating the dragon needs the reflex layer to fight
+competently on its own between turns - dodge, retreat, drink, re-engage - rather than the mind
+steering every swing.
+
+Open: real-time combat reflexes good enough to survive a boss between turns; then rung 6.
 
 ## Minds beyond Claude Code
 
