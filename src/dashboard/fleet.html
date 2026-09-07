@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Golem fleet</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#141518; --panel:#1c1e23; --line:#2a2d34; --fg:#e6e6e6; --dim:#9aa0a8; --acc:#c9a227; --ok:#5fb56a; --bad:#d9534f; --tool:#7fb3ff; --mono: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+  header { display:flex; gap:16px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; }
+  header h1 { font-size:16px; margin:0; color:var(--acc); }
+  header .meta { font-family:var(--mono); font-size:12.5px; color:var(--dim); flex:1; }
+  main { display:grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap:12px; padding:12px 16px; height: calc(100vh - 50px); }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:6px; display:flex; flex-direction:column; min-height:0; }
+  section h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:0; padding:8px 12px; border-bottom:1px solid var(--line); display:flex; gap:8px; align-items:center; }
+  section h2 .sp { flex:1; }
+  section h2 a, section h2 button { font-size:11px; color:var(--tool); background:none; border:1px solid var(--line); border-radius:4px; padding:2px 8px; cursor:pointer; text-decoration:none; }
+  #agents { grid-column: 1 / span 2; }
+  .cards { display:flex; gap:12px; padding:10px 12px; flex-wrap:wrap; }
+  .card { flex:1 1 320px; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px 12px; min-width:0; }
+  .card .name { font-weight:600; color:var(--acc); display:flex; align-items:center; gap:8px; }
+  .card .name a { color:var(--tool); font-size:12px; font-weight:400; text-decoration:none; }
+  .card .state { font-family:var(--mono); font-size:12px; color:var(--dim); margin-top:4px; white-space:pre-wrap; word-break:break-word; }
+  .card .last { font-size:12.5px; margin-top:6px; color:var(--fg); white-space:pre-wrap; word-break:break-word; }
+  .card .last .k { color:var(--dim); font-family:var(--mono); font-size:11px; margin-right:6px; }
+  .feed { overflow:auto; padding:8px 12px; font-family:var(--mono); font-size:12.5px; flex:1; }
+  .ev { padding:3px 0; border-bottom:1px dotted var(--line); white-space:pre-wrap; word-break:break-word; }
+  .ev .t { color:var(--dim); margin-right:8px; }
+  .ev .who { color:var(--acc); margin-right:6px; }
+  .ev.bus .who { color:var(--tool); }
+  .ev.say { color:var(--fg); }
+  .ev.turn, .ev.reflex { color:var(--dim); }
+  .ev.death { color:var(--bad); }
+  .tabs { display:flex; gap:4px; }
+  .tabs button.on { background:var(--line); color:var(--fg); }
+  pre.md { margin:0; padding:10px 12px; overflow:auto; flex:1; font-family:var(--mono); font-size:12.5px; white-space:pre-wrap; word-break:break-word; color:var(--fg); }
+  pre.md .h { color:var(--acc); font-weight:600; }
+  pre.md .done { color:var(--dim); text-decoration:line-through; }
+</style>
+</head>
+<body>
+<header><h1>Golem fleet</h1><div class="meta" id="meta">connecting…</div></header>
+<main>
+  <section id="agents"><h2>agents <span class="sp"></span><span id="count"></span></h2><div class="cards" id="cards"></div></section>
+  <section><h2>bus + chat <span class="sp"></span><small id="busmeta"></small></h2><div class="feed" id="feed"></div></section>
+  <section><h2><span class="tabs"><button class="on" data-f="tasks">tasks</button><button data-f="places">places</button><button data-f="chests">chests</button></span><span class="sp"></span><button id="reload">reload</button></h2><pre class="md" id="md">…</pre></section>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const token = q.get("token") || localStorage.getItem("golem.fleet.token") || "";
+if (q.get("token")) localStorage.setItem("golem.fleet.token", q.get("token"));
+const H = { authorization: `Bearer ${token}` };
+const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const hhmm = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const last = {};           // agent -> { say, turn }
+let shared = { tasks: "", places: "", chests: "" };
+let tab = "tasks";
+
+async function get(path) { const r = await fetch(path, { headers: H }); if (!r.ok) throw new Error(`${path}: ${r.status}`); return r.json(); }
+function renderCards(agents) {
+  document.getElementById("count").textContent = `${agents.length}`;
+  const el = document.getElementById("cards");
+  el.innerHTML = agents.map((a) => {
+    const l = last[a.name] || {};
+    return `<div class="card"><div class="name">${esc(a.name)} <a href="${a.dash}" target="_blank">open ↗</a></div><div class="state">${esc(a.state)}</div>` +
+      (l.say ? `<div class="last"><span class="k">said</span>${esc(l.say)}</div>` : "") +
+      (l.turn ? `<div class="last"><span class="k">turn</span>${esc(l.turn)}</div>` : "") + `</div>`;
+  }).join("");
+}
+function add(cls, who, html, t = Date.now()) {
+  const feed = document.getElementById("feed");
+  const atBottom = feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 30;
+  const d = document.createElement("div"); d.className = "ev " + cls;
+  d.innerHTML = `<span class="t">${hhmm(t)}</span><span class="who">${esc(who)}</span>${html}`;
+  feed.appendChild(d);
+  while (feed.children.length > 400) feed.removeChild(feed.firstChild);
+  if (atBottom) feed.scrollTop = feed.scrollHeight;
+}
+function renderMd() {
+  const text = shared[tab] || "(empty)";
+  document.getElementById("md").innerHTML = text.split("\n").map((l) =>
+    /^#/.test(l) ? `<span class="h">${esc(l)}</span>` : /^- \[x\]/i.test(l) ? `<span class="done">${esc(l)}</span>` : esc(l)).join("\n");
+}
+async function loadShared() { try { shared = await get("/fleet/shared"); renderMd(); } catch (e) { document.getElementById("md").textContent = "shared files unavailable: " + e.message; } }
+async function loadBus() {
+  try { for (const m of await get("/fleet/bus")) add("bus", `${m.from} → ${m.to}`, esc(m.text), m.t); document.getElementById("busmeta").textContent = "live"; }
+  catch (e) { document.getElementById("busmeta").textContent = "no bus"; }
+}
+function onEvent(type, d) {
+  const who = d.agent || "";
+  switch (type) {
+    case "hello": case "state": renderCards(d.agents); document.getElementById("meta").textContent = `${d.agents.length} agents · ${hhmm(d.t)}`; break;
+    case "bus": add("bus", `${d.from} → ${d.to}`, esc(d.text), d.t); break;
+    case "golem_tool": if (d.name === "say" && d.args && d.args.text) { last[who] = { ...(last[who] || {}), say: d.args.text }; add("say", who, esc(d.args.text), d.t); } break;
+    case "turn_end": last[who] = { ...(last[who] || {}), turn: `${d.stopReason} · ${(d.ms / 1000).toFixed(0)}s · ${d.toolCalls ?? 0} calls${d.model ? " · " + d.model : ""}` }; add("turn", who, `turn ${esc(d.stopReason)} · ${(d.ms / 1000).toFixed(0)}s · ${d.toolCalls ?? 0} calls`, d.t); break;
+    case "reflex": add("reflex", who, `reflex ${esc(d.name)}${d.note ? ": " + esc(d.note) : ""}`, d.t); break;
+    case "death": add("death", who, "died", d.t); break;
+    default: break;
+  }
+}
+function connect() {
+  const es = new EventSource(`/fleet/events?token=${encodeURIComponent(token)}`);
+  for (const t of ["hello", "state", "bus", "golem_tool", "turn_end", "reflex", "death", "prompt"]) es.addEventListener(t, (e) => { try { onEvent(t, JSON.parse(e.data)); } catch {} });
+  es.onerror = () => { document.getElementById("meta").textContent = "disconnected; retrying…"; };
+}
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => { document.querySelectorAll(".tabs button").forEach((x) => x.classList.remove("on")); b.classList.add("on"); tab = b.dataset.f; renderMd(); }));
+document.getElementById("reload").addEventListener("click", loadShared);
+(async () => {
+  if (!token) { document.body.innerHTML = "<p style='padding:2em'>Open /dash?token=… (any agent's mcp token from data/&lt;name&gt;/tokens.json).</p>"; return; }
+  try { renderCards((await get("/fleet/status")).agents); } catch (e) { document.getElementById("meta").textContent = "unauthorized or offline: " + e.message; return; }
+  await loadBus(); await loadShared(); connect();
+  setInterval(loadShared, 30000);
+})();
+</script>
+</body>
+</html>

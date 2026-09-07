@@ -6,6 +6,8 @@
 //   /agents/<name>/events   GET  text/event-stream                  live transcript + events (bridge)
 //   /agents/<name>/dash     GET  the dashboard page (token in ?token=, remembered by the page)
 //   /agents/<name>/runs, /reflexes (GET/POST), /inbox (GET), /transcript, /shot, /met   dashboard data
+//   /dash                   GET  the fleet page: every agent, the bus, the shared files
+//   /fleet/status|bus|shared|events   fleet data (any agent's token works)
 // All routes require `Authorization: Bearer <agent mcp token>` (or ?token= on GET, for the browser).
 // Bound to 127.0.0.1 by default.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -21,6 +23,7 @@ import { GolemError } from "../primitives/errors.ts";
 import { makeLog, type Logger } from "../util/log.ts";
 import { ALL_TOOLS, type ToolCtx } from "./tools.ts";
 import type { ShemEngine } from "../shem/engine.ts";
+import type { AgentBus, BusMessage } from "../comms/bus.ts";
 
 export interface HostedAgent {
   rt: AgentRuntime;
@@ -52,6 +55,10 @@ export class GolemHttpHost {
     this.log = log ?? makeLog("http");
   }
 
+  /** Fleet-wide things the fleet page shows: the agent bus and the shared world dir. Set by `golem up`. */
+  private fleet: { bus?: AgentBus; sharedWorldDir?: string } = {};
+  setFleet(f: { bus?: AgentBus; sharedWorldDir?: string }): void { this.fleet = f; }
+
   register(name: string, hosted: HostedAgent): void { this.agents.set(name, hosted); }
   unregister(name: string): void { this.agents.delete(name); }
   mcpUrl(name: string): string { return `http://${this.host}:${this.port}/agents/${encodeURIComponent(name)}/mcp`; }
@@ -77,8 +84,14 @@ export class GolemHttpHost {
     const url = new URL(req.url ?? "/", `http://${this.host}:${this.port}`);
     if (url.pathname === "/" || url.pathname === "/agents") {
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      res.end(`<!doctype html><meta charset=utf-8><title>Golem</title><body style="font:14px system-ui;background:#141518;color:#e6e6e6;padding:2em"><h1 style="color:#c9a227">Golem</h1><p>Agents: ${[...this.agents.keys()].map((n) => `<a style="color:#7fb3ff" href="/agents/${encodeURIComponent(n)}/dash">${n}</a>`).join(", ") || "none"}</p><p style="color:#9aa0a8">Open an agent with <code>?token=&lt;mcp token from data/&lt;name&gt;/tokens.json&gt;</code> the first time; the page remembers it.</p>`);
+      res.end(`<!doctype html><meta charset=utf-8><title>Golem</title><body style="font:14px system-ui;background:#141518;color:#e6e6e6;padding:2em"><h1 style="color:#c9a227">Golem</h1><p><a style="color:#7fb3ff" href="/dash">fleet dashboard</a> (add <code>?token=</code> from any agent's <code>data/&lt;name&gt;/tokens.json</code>)</p><ul>${[...this.agents.keys()].map((n) => `<li><a style="color:#7fb3ff" href="/agents/${encodeURIComponent(n)}/dash">${n}</a></li>`).join("")}</ul></body>`);
       return;
+    }
+    if (url.pathname === "/dash") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(fleetHtml()); return; }
+    const fm = /^\/fleet\/(status|bus|shared|events)$/.exec(url.pathname);
+    if (fm) {
+      if (!this.fleetAuthed(req, url)) { res.writeHead(401, { "content-type": "text/plain" }); res.end("unauthorized"); return; }
+      return this.handleFleet(fm[1]!, req, res);
     }
     const m = /^\/agents\/([^/]+)\/(mcp|inbox|say|status|events|dash|runs|reflexes|transcript|shot|met)$/.exec(url.pathname);
     if (!m) { res.writeHead(404, { "content-type": "text/plain" }); res.end("not found"); return; }
@@ -190,6 +203,46 @@ export class GolemHttpHost {
     }
   }
 
+  /** Any registered agent's token opens the fleet views: whoever runs one golem runs the fleet. */
+  private fleetAuthed(req: IncomingMessage, url: URL): boolean {
+    const auth = req.headers.authorization ?? "";
+    const q = req.method === "GET" ? url.searchParams.get("token") : null;
+    for (const h of this.agents.values()) if (auth === `Bearer ${h.token}` || (q && q === h.token)) return true;
+    return false;
+  }
+
+  private agentRows(): { name: string; state: string; dash: string }[] {
+    return [...this.agents.entries()].map(([name, h]) => ({ name, state: h.drive.stateHeader().split("\n")[0]!.replace(/^\[state\]\s*/, ""), dash: `/agents/${encodeURIComponent(name)}/dash?token=${encodeURIComponent(h.token)}` }));
+  }
+
+  private handleFleet(route: string, req: IncomingMessage, res: ServerResponse): void {
+    switch (route) {
+      case "status": return this.json(res, { agents: this.agentRows(), bus: !!this.fleet.bus, shared: !!this.fleet.sharedWorldDir });
+      case "bus": return this.json(res, (this.fleet.bus?.log ?? []).slice(-150));
+      case "shared": {
+        const dir = this.fleet.sharedWorldDir;
+        const read = (f: string) => { try { return dir ? readFileSync(resolve(dir, f), "utf8") : ""; } catch { return ""; } };
+        return this.json(res, { tasks: read("tasks.md"), places: read("places.md"), chests: read("chests.md") });
+      }
+      case "events": {
+        res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
+        this.streams.add(res);
+        const send = (type: string, data: unknown) => { try { res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* closed */ } };
+        send("hello", { t: Date.now(), agents: this.agentRows() });
+        const offs = [...this.agents.entries()].map(([name, h]) => h.subscribe((ev) => send(ev.type, { ...ev, agent: name })));
+        let busSeen = this.fleet.bus?.log.length ?? 0;
+        const tick = setInterval(() => {
+          send("state", { t: Date.now(), agents: this.agentRows() });
+          const log = this.fleet.bus?.log ?? [];
+          for (const m of log.slice(busSeen)) send("bus", m as BusMessage);
+          busSeen = log.length;
+        }, 3000);
+        req.on("close", () => { for (const off of offs) off(); clearInterval(tick); this.streams.delete(res); });
+        return;
+      }
+    }
+  }
+
   private handleEvents(req: IncomingMessage, res: ServerResponse, hosted: HostedAgent): void {
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
     res.write(`event: hello\ndata: ${JSON.stringify({ t: Date.now(), state: hosted.drive.stateHeader() })}\n\n`);
@@ -228,6 +281,12 @@ function buildMcpServer(name: string, hosted: HostedAgent): McpServer {
   server.registerResource("status", `golem://${name}/status`, { description: "Current state line" }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/plain", text: hosted.drive.stateHeader() }] }));
   server.registerResource("inbox", `golem://${name}/inbox`, { description: "Unread inbox" }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: "text/plain", text: hosted.drive.peekInbox() }] }));
   return server;
+}
+
+let fleetCache: string | undefined;
+function fleetHtml(): string {
+  if (!fleetCache || process.env.GOLEM_DEV) fleetCache = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../dashboard/fleet.html"), "utf8");
+  return fleetCache;
 }
 
 let dashboardCache: string | undefined;
