@@ -131,6 +131,23 @@ export function makeShemHost(rt: AgentRuntime): Host {
   def("dig_down", async (p, a, n) => { const r = await p.digDown(toNum(arg(a, n, 0, "n") ?? 1), { maxDrop: toNum(arg(a, n, 1, "max_drop") ?? 3) }); return { dug: r.dug, stopped: r.stopped, pos: new Vec3(r.pos.x, r.pos.y, r.pos.z, false) }; });
 
   // ---- actions ----
+  def("shoot_at", async (p, a, n) => {
+    const t = arg(a, n, 0, "target");
+    const id = typeof t === "number" ? t : (t as { id?: number })?.id;
+    if (id === undefined) throw new Error("shoot_at needs an entity or an entity id");
+    const r = await p.shootAt(id, { shots: toNum(arg(a, n, 1, "shots") ?? 1), lead: arg(a, n, 2, "lead") !== false, charge: toNum(arg(a, n, 3, "charge") ?? 25), maxRange: toNum(arg(a, n, 4, "max_range") ?? 64) });
+    return { fired: r.fired, hits: r.hits, damage: r.damage, killed: r.killed, stopped: r.stopped, ticks: r.ticks };
+  });
+  def("melee_while", async (p, a, n) => {
+    const t = arg(a, n, 0, "target");
+    const id = typeof t === "number" ? t : (t as { id?: number })?.id;
+    if (id === undefined) throw new Error("melee_while needs an entity or an entity id");
+    const below = toNum(arg(a, n, 3, "stop_below_health") ?? 0);
+    const r = await p.meleeWhile(id, { maxMs: toNum(arg(a, n, 1, "max_ms") ?? 5000), reach: toNum(arg(a, n, 2, "reach") ?? 3.5), ...(below > 0 ? { stopBelowHealth: below } : {}) });
+    return { fired: r.fired, hits: r.hits, damage: r.damage, killed: r.killed, stopped: r.stopped, ticks: r.ticks };
+  });
+  def("combat_stop", async (p) => { const r = await p.combatStop(); return { stopped: r.stopped }; });
+
   def("mine", async (p, a, n) => { const r = await p.mine(posOf(arg(a, n, 0, "pos") ?? null), { collect: arg(a, n, 1, "collect") !== false }); return { broken: r.broken, block: r.block, ms: r.ms }; });
   def("mine_all", async (p, a, n) => { const r = await p.mineAll(toStr(arg(a, n, 0, "kind") ?? ""), toNum(arg(a, n, 1, "want") ?? 1), { timeoutMs: durArg(arg(a, n, 2, "timeout"), 300_000) }); return { got: r.got, item: r.item, ms: r.ms }; });
   def("place", async (p, a, n) => { const r = await p.place(toStr(arg(a, n, 0, "item") ?? ""), posOf(arg(a, n, 1, "pos") ?? null)); return { placed: r.placed }; });

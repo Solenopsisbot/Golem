@@ -46,11 +46,20 @@ script eat_if_hurt(below: float = 12): bool {
 /// pull looses at a ghost. And compensate the real drop: a Minecraft arrow falls at 20 blocks/s^2, so
 /// over flight time t it drops 10*t^2 — three blocks at thirty out, where a fixed fudge factor puts
 /// every shot in the floor.
-script lead_shot(kind: string = "ender_dragon", radius: float = 140): bool {
+script lead_shot(kind: string = "ender_dragon", radius: float = 140, shots: int = 1): bool {
   if (inventory.count("bow") < 1) return false
   if (inventory.count("arrow") < 1) return false
   let a = nearest(kind, radius)
   if (a == none) return false
+  // Prefer the body's own loop: it tracks the target every tick and looses on the right one, where
+  // anything we do from here is four round-trips and about a second and a half late. Older bodies
+  // without it raise `unsupported`, and the hand-rolled version below still works, just badly.
+  try {
+    let r = shoot_at(a, shots: shots)
+    return r.fired > 0
+  } catch (e) {
+    if (e.kind != "unsupported") { log "shoot_at: ${e.kind} ${e.message}" }
+  }
   let p1 = a.pos
   equip("bow")
   look_at(p1)          // rough aim while pulling, so the head starts in the right region
@@ -87,7 +96,11 @@ script hold_ground(kinds: any = none, radius: float = 12, flee_below: float = 7,
       if (t == none) break
       if (health <= flee_below) { back_off(t, 16); break }
       try {
-        let r = attack(t, timeout: 6s)
+        // Same argument as lead_shot: the body swings on the real attack cooldown and resolves
+        // multi-part entities, where `attack` from here is a round-trip per swing.
+        let r = none
+        try { r = melee_while(t, max_ms: 4000, stop_below_health: flee_below) }
+        catch (e2) { if (e2.kind != "unsupported") fail "${e2.kind}: ${e2.message}"; r = attack(t, timeout: 6s) }
         hits = hits + r.hits
       } catch (e) { log "swing: ${e.kind}"; break }
     }

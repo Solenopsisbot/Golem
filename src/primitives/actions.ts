@@ -2,7 +2,7 @@
 // throws a typed GolemError.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { ContainerResult, CraftResult, CraftableEntry, MineResult, PlaceResult, RecipeResult, ScreenshotResult } from "../body/results.ts";
+import type { CombatResult, ContainerResult, CraftResult, CraftableEntry, MineResult, PlaceResult, RecipeResult, ScreenshotResult } from "../body/results.ts";
 import { FACES, FACE_VEC, OPPOSITE, add, center, dist, faceToward, fmtPos, offset, samePos, scale, type Face, type Pos, type Vec } from "../util/geom.ts";
 import { fullId, shortId, type Ctx } from "./context.ts";
 import { GolemError, fromClef, sleep, until } from "./errors.ts";
@@ -234,6 +234,59 @@ export async function interactEntity(ctx: Ctx, id: number, hand: "main" | "off" 
   if (e.distance > REACH) await goto(ctx, { x: Math.floor(e.x), y: Math.floor(e.y), z: Math.floor(e.z) }, { reach: 2, timeoutMs: 30_000 });
   await lookAt(ctx, { entityId: id });
   try { await ctx.body.call("interactEntity", { entityId: id, hand }); } catch (err) { throw fromClef(err, `interact ${id}`); }
+}
+
+export interface ShootAtOpts { lead?: boolean; charge?: number; shots?: number; maxRange?: number }
+export interface MeleeWhileOpts { maxMs?: number; reach?: number; stopBelowHealth?: number }
+
+/** The body owns these loops; without them the caller must fall back to aiming over the wire. */
+function needsCombatLoop(ctx: Ctx, cmd: string): void {
+  if (!ctx.body.caps.has(cmd)) {
+    throw new GolemError("unsupported", `the body has no ${cmd}; it needs a Clef build with the combat loops (CLEF-CHANGES #19)`);
+  }
+}
+
+/**
+ * Shoot at an entity with the bow, with the aiming loop running on the body at 20 Hz.
+ *
+ * This is the whole reason #19 exists. Aiming from here costs four round-trips — sample, draw,
+ * re-sample, aim, loose — about 1.5 s, against a target that has moved twenty blocks by then. The
+ * body can track the entity every tick, solve lead from its real velocity and drop from the arrow's
+ * actual ballistics, and set rotation on the release tick.
+ */
+export async function shootAt(ctx: Ctx, target: number | Entity, opts: ShootAtOpts = {}): Promise<CombatResult> {
+  needsCombatLoop(ctx, "shootAt");
+  const entityId = typeof target === "number" ? target : target.id;
+  const args: Record<string, unknown> = { entityId, wait: true };
+  if (opts.lead !== undefined) args.lead = opts.lead;
+  if (opts.charge !== undefined) args.charge = opts.charge;
+  if (opts.shots !== undefined) args.shots = opts.shots;
+  if (opts.maxRange !== undefined) args.maxRange = opts.maxRange;
+  return ctx.activity.run(`shoot #${entityId}`, async () => {
+    try { return (await ctx.body.call("shootAt", args, { timeoutMs: 120_000 })) as CombatResult; }
+    catch (e) { throw fromClef(e, `shootAt #${entityId}`); }
+  });
+}
+
+/** Swing at an entity while it stays in reach, on the body's attack-cooldown cadence. */
+export async function meleeWhile(ctx: Ctx, target: number | Entity, opts: MeleeWhileOpts = {}): Promise<CombatResult> {
+  needsCombatLoop(ctx, "meleeWhile");
+  const entityId = typeof target === "number" ? target : target.id;
+  const args: Record<string, unknown> = { entityId, wait: true };
+  if (opts.maxMs !== undefined) args.maxMs = opts.maxMs;
+  if (opts.reach !== undefined) args.reach = opts.reach;
+  if (opts.stopBelowHealth !== undefined) args.stopBelowHealth = opts.stopBelowHealth;
+  return ctx.activity.run(`melee #${entityId}`, async () => {
+    try { return (await ctx.body.call("meleeWhile", args, { timeoutMs: 120_000 })) as CombatResult; }
+    catch (e) { throw fromClef(e, `meleeWhile #${entityId}`); }
+  });
+}
+
+/** Cut a running combat loop short (a reflex taking the body back). */
+export async function combatStop(ctx: Ctx): Promise<{ stopped: boolean; kind?: string }> {
+  if (!ctx.body.caps.has("combat.stop")) return { stopped: false };
+  try { return (await ctx.body.call("combat.stop")) as { stopped: boolean; kind?: string }; }
+  catch (e) { throw fromClef(e, "combat.stop"); }
 }
 
 export interface AttackOpts { timeoutMs?: number; weapon?: "auto" | "none" }

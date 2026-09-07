@@ -192,6 +192,23 @@ export interface ClefCommands {
     "item": string;
   };
   "craftable": Record<never, never>;
+  "shootAt": {
+    "entityId": number;
+    "lead"?: boolean; // default true
+    "charge"?: number; // default 25
+    "shots"?: number; // default 1
+    "maxRange"?: number; // default 64
+    "wait"?: boolean; // default true
+  };
+  "meleeWhile": {
+    "entityId": number;
+    "maxMs"?: number; // default 5000
+    "reach"?: number; // default 3.5
+    "stopBelowHealth"?: number;
+    "wait"?: boolean; // default true
+  };
+  "combat.stop": Record<never, never>;
+  "combat.status": Record<never, never>;
   "container": Record<never, never>;
   "clickSlot": {
     "slot": number;
@@ -378,6 +395,18 @@ export interface ClefEvents {
     "detail"?: string;
     "ticks": number;
   };
+  /** a shootAt / meleeWhile finished. 'stopped' is done | dead | gone | timeout | range | health | blocked | out_of_ammo | cancelled | replaced. 'hits' is melee swings for meleeWhile, and for shootAt the number of times the target's health dropped during the run — evidence, not a hit registry, since damage from any source counts */
+  "combatDone": {
+    "kind": string;
+    "entityId": number;
+    "fired": number;
+    "hits": number;
+    "damage": number;
+    "killed": boolean;
+    "stopped": string;
+    "detail"?: string;
+    "ticks": number;
+  };
   /** the bot reached its goto goal */
   "nav.done": {
     "x": number;
@@ -431,8 +460,9 @@ export type ClefErrorCode =
   | "NOT_IN_WORLD"
   | "NOT_CONNECTED"
   | "NOT_FOUND"
+  | "MISSING_ITEM"
   | "RATE_LIMIT"
   | "COMMAND_FAILED";
 
 /** Command names present in the schema this file was generated from (for capability diffs). */
-export const CLEF_KNOWN_COMMANDS: readonly string[] = ["ping","help","schema","stats","optimize","subscribe","unsubscribe","events","status","auth.status","control.rotateToken","connect","disconnect","chat","chatHistory","whisper","batch","look","lookAt","players","headless","screenshot","registry","goto","nav.check","baritone","nav.stop","nav.status","move","stopMove","mine","stopMine","breakBlock","place","use","attack","setSlot","dropItem","inventory","entities","blockAt","findBlocks","blocksIn","target","interactEntity","swapHands","pickBlock","useHold","useRelease","eat","respawn","craft","recipes","craftable","container","clickSlot","closeScreen","selectTrade","screen","clickButton","setText","serverui","findItem","equip","moveToHotbar","deposit","withdraw","dropStack"];
+export const CLEF_KNOWN_COMMANDS: readonly string[] = ["ping","help","schema","stats","optimize","subscribe","unsubscribe","events","status","auth.status","control.rotateToken","connect","disconnect","chat","chatHistory","whisper","batch","look","lookAt","players","headless","screenshot","registry","goto","nav.check","baritone","nav.stop","nav.status","move","stopMove","mine","stopMine","breakBlock","place","use","attack","setSlot","dropItem","inventory","entities","blockAt","findBlocks","blocksIn","target","interactEntity","swapHands","pickBlock","useHold","useRelease","eat","respawn","craft","recipes","craftable","shootAt","meleeWhile","combat.stop","combat.status","container","clickSlot","closeScreen","selectTrade","screen","clickButton","setText","serverui","findItem","equip","moveToHotbar","deposit","withdraw","dropStack"];

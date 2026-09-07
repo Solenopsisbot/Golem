@@ -33,14 +33,14 @@ reflex dragon_fight priority 93 on tick when dimension == "the_end" and nearest(
         // full sword damage, where arrows at a circling one mostly miss. Walk to the fountain FLOOR -
         // never to d.pos, which is its body several blocks up, and a mid-air goal builds the tower.
         try { goto(pos(0, 63, 0), reach: 5, timeout: 6s) } catch (e) { log "close: ${e.kind}" }
-        try { attack(d, timeout: 6s) } catch (e) { log "melee: ${e.kind}" }
+        // The body swings on the real cooldown and resolves the dragon's parts; the parent entity
+        // ignores damage, which is why hitting "the dragon" from a script can register nothing.
+        try { melee_while(d, max_ms: 5000, stop_below_health: 6) }
+        catch (e) { if (e.kind == "unsupported") { try { attack(d, timeout: 6s) } catch (e2) { log "melee: ${e2.kind}" } } else { log "melee: ${e.kind}" } }
       } else if (inventory.count("arrow") > 0) {
         // Out of reach: lead it. Aiming where it already is puts arrows in the floor.
-        repeat (6) {
-          if (inventory.count("arrow") < 1) break
-          try { lead_shot() } catch (e) { log "shot: ${e.kind}" }
-          wait 200ms
-        }
+        // One call, six arrows: the body runs the aiming loop, so there is nothing to interleave.
+        try { lead_shot("ender_dragon", 140, 6) } catch (e) { log "shot: ${e.kind}" }
         // Spent arrows are lying around and the quiver is finite; sweep them up while it is far off.
         if (inventory.count("arrow") < 60) {
           try { collect_drops(14) } catch (e) { log "collect: ${e.kind}" }

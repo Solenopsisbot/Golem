@@ -51,7 +51,7 @@ export async function findBlocks(ctx: Ctx, kinds: string | string[], opts: FindB
   return hits.map((h) => ({ ...h, dist: dist(eye, center(h)) })).sort((a, b) => a.dist - b.dist);
 }
 
-export interface Entity extends EntityResult { short: string; hostile: boolean; isItem: boolean; isPlayer: boolean; pos: Vec }
+export interface Entity extends EntityResult { short: string; hostile: boolean; isItem: boolean; isPlayer: boolean; pos: Vec; vel: Vec }
 
 export interface EntitiesOpts { radius?: number; kinds?: string[]; hostileOnly?: boolean }
 
@@ -69,7 +69,9 @@ export async function entities(ctx: Ctx, opts: EntitiesOpts = {}): Promise<Entit
     const short = shortId(e.type);
     const info = ctx.mc.entitiesByName[short];
     const hostile = e.hostile ?? (info?.type === "hostile");
-    const ent: Entity = { ...e, short, hostile, isItem: short === "item", isPlayer: short === "player", pos: { x: e.x, y: e.y, z: e.z } };
+    // Motion comes flat (vx/vy/vz) or as an array; older bodies send neither, so it defaults to still.
+    const vel: Vec = { x: e.vx ?? e.velocity?.x ?? 0, y: e.vy ?? e.velocity?.y ?? 0, z: e.vz ?? e.velocity?.z ?? 0 };
+    const ent: Entity = { ...e, short, hostile, isItem: short === "item", isPlayer: short === "player", pos: { x: e.x, y: e.y, z: e.z }, vel };
     if (kinds && !kinds.includes(e.type)) continue;
     if (opts.hostileOnly && !hostile) continue;
     out.push(ent);

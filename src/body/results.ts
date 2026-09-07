@@ -51,7 +51,19 @@ export interface EntityResult {
   villager?: { profession: string; level: number };
   item?: { id: string; count: number };
   owner?: string; lookingAtMe?: boolean;
+  /** Motion in blocks/tick as the client observed it (#20). Sent flat and as an array; same numbers. */
+  vx?: number; vy?: number; vz?: number;
   velocity?: { x: number; y: number; z: number };
+}
+
+/**
+ * Outcome of a body-side combat loop (#19). `hits` is honest about what it can know: melee swings for
+ * meleeWhile, but for shootAt the number of times the target's health dropped during the run — evidence
+ * rather than a hit registry, since damage from any source counts.
+ */
+export interface CombatResult {
+  kind: string; entityId: number; fired: number; hits: number; damage: number;
+  killed: boolean; stopped: string; detail?: string; ticks: number;
 }
 
 export interface BlockAtResult { block: string; air: boolean }
