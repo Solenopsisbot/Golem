@@ -254,6 +254,11 @@ export class EvalRunner {
     let detail = "";
     try {
       await this.reset(task, agent.body.username);
+      // The body joins the world before the reset can move it, at wherever the LAST run left it -
+      // which after a void fall in the End is mid-air over nothing. It dies during setup, through no
+      // fault of the run, and on a rung that measures deaths that death is the difference between a
+      // clean score and a lie. The task starts when the goal is pushed, so the count starts there.
+      deaths = 0;
       await session.rt.mirror.refresh();
       session.drive.goal = task.goal;
       session.drive.push({ kind: "goal", priority: 80, from: loaded.config.players.owners[0] ?? "eval", text: `${loaded.config.players.owners[0] ?? "eval"} set your goal: ${task.goal}` });
