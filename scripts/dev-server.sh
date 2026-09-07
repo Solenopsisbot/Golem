@@ -52,6 +52,11 @@ fi
 # Keep the difficulty line in sync with MC_DIFFICULTY even on an existing properties file.
 sed -i '' "s/^difficulty=.*/difficulty=$DIFFICULTY/" "$DIR/server.properties"
 
+# The ender dragon throws players around, and Baritone's movement looks like flight to the vanilla
+# check, which kicks the bot mid-fight ("Flying is not enabled on this server"). A bot that gets
+# disconnected for being airborne cannot fight anything that launches it.
+grep -q '^allow-flight=' "$DIR/server.properties" && sed -i '' "s/^allow-flight=.*/allow-flight=true/" "$DIR/server.properties" || echo "allow-flight=true" >> "$DIR/server.properties"
+
 # RCON for the eval runner (world resets without op-ing the bot). Password lives next to the world.
 RCON_PORT="${MC_RCON_PORT:-25576}"
 [[ -f "$DIR/rcon.password" ]] || python3 -c "import secrets;print(secrets.token_urlsafe(18))" > "$DIR/rcon.password"
