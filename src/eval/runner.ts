@@ -23,6 +23,8 @@ export class EvalRunner {
   /** The session of the task in flight, so close() (Ctrl-C) can stop it instead of hanging on the mind. */
   private active: AgentSession | undefined;
   private aborted = false;
+  /** Where a death in the End should put the bot back, re-asserted while the rung runs. */
+  private endRespawn: { x: number; y: number; z: number } | null = null;
   constructor(opts: RunnerOptions) { this.opts = opts; }
 
   private async rconConnect(): Promise<Rcon> {
@@ -39,6 +41,7 @@ export class EvalRunner {
 
   private async reset(task: Task, bot: string): Promise<void> {
     const r = await this.rconConnect();
+    this.endRespawn = null;
     const run = async (c: string) => { const out = await r.command(c.replace(/\{bot\}/g, bot)); log.debug(`rcon ${c} -> ${out.slice(0, 80)}`); };
     const s = task.setup;
     // Keep gear through death: a combat rung that respawns the bot into the fight must not strip it
@@ -113,6 +116,15 @@ export class EvalRunner {
       // to the overworld sky platform, a dimension and a thousand blocks from the fight, and the run
       // is over however much time is left on the clock.
       await run(`execute at ${bot} run spawnpoint ${bot} ~ ~ ~`);
+      // Setting it once is not enough: vanilla throws the whole `respawn` record away the first time
+      // a respawn there fails, and every death after that lands at the overworld world spawn. Run 29
+      // died five times in two minutes, woke up in the overworld, and spent the rest of the rung
+      // walking toward a stronghold with the dragon untouched behind it. Remember the spot so the
+      // poll loop can put it back - a player who dies here walks through the portal again in half a
+      // minute, and losing the dimension outright is a harness artefact, not part of the fight.
+      const posOut = await r.command(`data get entity ${bot} Pos`);
+      const at = posOut.match(/\[(-?[\d.]+)d, (-?[\d.]+)d, (-?[\d.]+)d\]/);
+      if (at) this.endRespawn = { x: Math.round(Number(at[1])), y: Math.round(Number(at[2])), z: Math.round(Number(at[3])) };
     } else if (dim) {
       await run(`execute in ${dim} run tp ${bot} ~ 70 ~`);
       await run(`execute at ${bot} run spawnpoint ${bot} ~ ~ ~`);
@@ -180,6 +192,27 @@ export class EvalRunner {
       const [cx, , cz] = s.arena.center, h = s.arena.half;
       await run(`execute in minecraft:${s.arena.dimension} run forceload remove ${cx - h - 1} ${cz - h - 1} ${cx + h + 1} ${cz + h + 1}`);
     }
+  }
+
+  /**
+   * Put the End respawn point back, every poll, for a rung that starts there.
+   *
+   * A forced spawnpoint in the End is honoured until the first respawn that fails, at which point
+   * vanilla clears the entire `respawn` record and every death after it lands at the overworld world
+   * spawn - a dimension and a thousand blocks from the island. That ends the rung as surely as a
+   * failed predicate, except it looks like the agent wandered off instead of like a bug.
+   *
+   * Re-asserting is not helping the bot fight. A player who dies in the End walks back through the
+   * portal in half a minute; losing the dimension entirely is a harness artefact, and this only
+   * restores what the setup already granted.
+   */
+  private async keepEndRespawn(bot: string): Promise<void> {
+    const p = this.endRespawn;
+    if (!p) return;
+    try {
+      const r = await this.rconConnect();
+      await r.command(`execute in minecraft:the_end run spawnpoint ${bot} ${p.x} ${p.y} ${p.z}`);
+    } catch { /* a probe must never take the run down with it */ }
   }
 
   private async check(session: AgentSession, preds: Predicate[], said: string[], deaths: number): Promise<{ ok: boolean; detail: string }> {
@@ -266,6 +299,7 @@ export class EvalRunner {
       while (Date.now() < deadline && !this.aborted) {
         await new Promise((r) => setTimeout(r, 5000));
         if (this.aborted) break;
+        await this.keepEndRespawn(agent.body.username);
         const s = await this.check(session, task.success, said, deaths);
         if (s.ok) { status = "success"; detail = s.detail; break; }
         detail = s.detail;
