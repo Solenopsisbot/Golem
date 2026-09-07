@@ -82,7 +82,24 @@ rungs use a handful of weakened enemies. Beating the dragon needs the reflex lay
 competently on its own between turns - dodge, retreat, drink, re-engage - rather than the mind
 steering every swing.
 
-Open: real-time combat reflexes good enough to survive a boss between turns; then rung 6.
+That reflex layer now exists (`shem/reflexes/dragon_fight.shem`, off by default) and works as a
+mechanism: it fires continuously, heals, breaks contact, recovers from deaths, and lands hits. It still
+cannot win, and the reason is architectural rather than tactical. Each shot costs four round-trips to
+the body — sample, draw, re-sample, aim, loose — about 1.5 s, against a dragon that covers twenty
+blocks in that time. Fixing the arrow ballistics (the drop was compensated at roughly half its real
+value) restarted damage, which is the tell: ballistics was the one error latency could not hide.
+
+So combat belongs in the body, beside Baritone, not in Shem and certainly not in the mind. Baritone is
+why movement is reliable — we do not hand-roll A* over a WebSocket — and the same argument applies to
+aiming. The shape of the fix is a Clef-side command (`shootAt {entityId, lead}` and a melee loop) that
+samples true velocity every tick, computes lead and drop exactly, and looses on the right tick. Golem
+then says "fight that" and the body does the 20 Hz work.
+
+Also worth naming: the rung's scaffolding drifted a long way (weakened mobs, an obsidian nook,
+fountain-side placement, most crystals pre-killed). That is fixture design turning into doing the
+agent's job for it, and it should be stripped back once the body can aim.
+
+Open: a Clef-side aiming/melee loop; then rung 6 with the scaffolding removed.
 
 ## Minds beyond Claude Code
 
