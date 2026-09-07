@@ -1,5 +1,32 @@
 // The End: shoot the crystals, then the dragon.
 
+/// Shoot a moving target where it is going to BE, not where it is.
+///
+/// A fully drawn arrow travels roughly 53 blocks a second, so a dragon 40 blocks away gets most of a
+/// second to move before the arrow arrives. Aiming straight at it is why 240 arrows put 2.5 damage on
+/// a dragon and the rest on the floor. This samples the target twice to get its velocity, leads it by
+/// the flight time, and adds lift for the drop. Returns false when the target is not in sight.
+script lead_shot(kind: string = "ender_dragon", radius: float = 140): bool {
+  let a = nearest(kind, radius)
+  if (a == none) return false
+  let p1 = a.pos
+  wait 250ms
+  let b = nearest(kind, radius)
+  if (b == none) return false
+  let p2 = b.pos
+  // 250 ms of travel scaled to blocks per second.
+  let vx = (p2.x - p1.x) * 4.0
+  let vy = (p2.y - p1.y) * 4.0
+  let vz = (p2.z - p1.z) * 4.0
+  let d = p2.dist(here)
+  let t = d / 53.0
+  equip("bow")
+  look_at(vec(p2.x + vx * t, p2.y + vy * t + d * 0.05, p2.z + vz * t))
+  use_hold(25)
+  use_release()
+  return true
+}
+
 /// One bow shot at an entity, aimed `lift` blocks above it for the arrow's drop.
 script aimed_shot(e: entity, lift: float = 0) {
   equip("bow")
@@ -44,7 +71,8 @@ script fight_dragon(): bool {
       try { attack(d, timeout: 8s) } catch (e) { log "melee: ${e.kind}" }
     } else {
       if (near < 70) {
-        aimed_shot(d, lift: 1 + near * 0.06)
+        // Lead it: a circling dragon is never where it was when you drew.
+        if (lead_shot() == false) aimed_shot(d, lift: 1 + near * 0.06)
       } else {
         try { timeout 30s { goto_xz(0, 0, reach: 6) } } catch (e) { log "to the fountain: ${e.kind}" }
       }

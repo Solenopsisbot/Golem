@@ -1,8 +1,8 @@
 {
   "name": "dragon",
-  "description": "Kill the ender dragon in the End. NEEDS A REAL DRAGON: a /summon'ed ender_dragon has no EnderDragonFight controller, so it hovers motionless where you put it and never circles, perches or attacks - an inert 200 hp target, not a fight. Use a world whose End still has its dragon, or respawn one properly with four end crystals on the exit portal. The summon below is a placeholder for that.",
-  "goal": "You are on the End island with a bow, arrows, a diamond sword, diamond armour and a carved pumpkin already worn on your head. The pumpkin is why endermen ignore you - do NOT take it off or swap it for a helmet. Kill the ender dragon. Start a snippet with `use \"lib/dragon\"`: `shoot_crystals()` destroys the end crystals on the pillars (they heal the dragon, so they go first - it returns how many it got), then `fight_dragon()` melees the dragon when it perches on the fountain and shoots it with the bow while it flies. Keep each call short and check your arrows and health between calls; eat or use a golden apple below half health. Never dig down here - below the island is the void. Say 'dragon dead' when it dies. You have 320 arrows: spend them on the dragon, and do not keep firing at a crystal that is caged in iron bars - break the cage or leave it.",
-  "timeout_s": 3000,
+  "description": "Kill the ender dragon in the End. Needs a world whose End still has its dragon: a /summon'ed ender_dragon has no EnderDragonFight controller, so it hovers motionless and never circles, perches or attacks. This rung relies on the real fight, so it must not summon one.",
+  "goal": "You are on the End island with a bow, 320 arrows, a diamond sword, diamond armour and a carved pumpkin already worn. The pumpkin is why endermen ignore you - do NOT take it off. Kill the ender dragon. Start a snippet with `use \"lib/dragon\"`. Use `lead_shot()` to shoot it while it flies: it samples the dragon's velocity and aims where it will be, because a fully drawn arrow takes about a second to cross the island and aiming straight at a circling dragon simply misses. When it comes down to perch on the fountain, hit it with the sword - that is when it takes the most damage. There are no crystals left, so every hit sticks and its health never comes back. You start in an obsidian nook with an open top - stay in it and shoot upward; step out only to melee a perched dragon, then get back in. eat or use a golden apple below half health, and keep each call short. Never dig down here - below the island is the void. Say 'dragon dead' when it dies.",
+  "timeout_s": 3600,
   "setup": {
     "clear_inventory": true,
     "give": [
@@ -21,13 +21,20 @@
     "dimension": "the_end",
     "commands": [
       "execute in minecraft:the_end run forceload add -32 -32 32 32",
+      "execute in minecraft:the_end run forceload add 32 -32 48 32",
       "execute in minecraft:the_end run kill @e[type=minecraft:enderman]",
-      "execute in minecraft:the_end run kill @e[type=minecraft:ender_dragon]",
-      "execute in minecraft:the_end run summon minecraft:ender_dragon 0 80 0",
-      "execute in minecraft:the_end run kill @e[type=minecraft:end_crystal,limit=7]"
+      "execute in minecraft:the_end run kill @e[type=minecraft:end_crystal,limit=7]",
+      "execute in minecraft:the_end run fill 37 63 -3 43 66 3 minecraft:obsidian",
+      "execute in minecraft:the_end run fill 38 64 -2 42 66 2 minecraft:air",
+      "execute in minecraft:the_end run tp {bot} 40.5 64 0.5",
+      "execute in minecraft:the_end run spawnpoint {bot} 40 64 0"
     ]
   },
   "success": [
+    {
+      "type": "said",
+      "includes": "dragon dead"
+    },
     {
       "type": "rcon",
       "command": "execute if entity @e[type=minecraft:ender_dragon]",
