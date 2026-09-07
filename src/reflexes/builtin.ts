@@ -98,24 +98,34 @@ async function escapeCloud(p: import("../primitives/index.ts").Primitives): Prom
   const len = Math.hypot(dx, dz) || 1;
   dx /= len; dz /= len;
   const CLEAR = 9;             // cloud radius is about 6; this leaves daylight around the edge
-  for (const dist of [10, 13, 16]) {
+  for (const dist of [10, 14]) {
     for (const turn of [0, Math.PI / 4, -Math.PI / 4, Math.PI / 2, -Math.PI / 2]) {
       const ux = dx * Math.cos(turn) - dz * Math.sin(turn);
       const uz = dx * Math.sin(turn) + dz * Math.cos(turn);
-      const spot = { x: Math.round(here.x + ux * dist), y: here.y, z: Math.round(here.z + uz * dist) };
-      if (clouds.some((c: Entity) => Math.hypot(spot.x - c.pos.x, spot.z - c.pos.z) < CLEAR)) continue;
-      const [floor, feet, head] = await Promise.all([
-        p.blockAt({ ...spot, y: spot.y - 1 }), p.blockAt(spot), p.blockAt({ ...spot, y: spot.y + 1 }),
-      ]);
-      if (!floor.solid || BAD_FOOTING.has(floor.id) || !feet.air || !head.air) continue;
-      // Six seconds, not twelve: the reflex re-fires every four, and a long goal that cannot be
-      // reached just stacks moves until the body starts answering RATE_LIMIT.
-      try { await p.goto(spot, { reach: 1, timeoutMs: 6000 }); }
-      catch { continue; }
-      return `${clouds.length} lingering cloud(s): moved to ${fmtPos(spot)}`;
+      const x = Math.round(here.x + ux * dist), z = Math.round(here.z + uz * dist);
+      if (clouds.some((c: Entity) => Math.hypot(x - c.pos.x, z - c.pos.z) < CLEAR)) continue;
+      // Try a few heights, not just our own. Standing in a dip - or on the respawn point, which on
+      // the End island sits below the surface - every candidate at our exact y is solid rock, so the
+      // whole search comes back empty and the caller quietly falls through to a one-block sidestep.
+      // That is how Tester ended up "stepping off" to the same block once a second while a cloud sat
+      // directly on its respawn point.
+      for (const dy of [0, 1, 2, -1, 3]) {
+        const spot = { x, y: here.y + dy, z };
+        const [floor, feet, head] = await Promise.all([
+          p.blockAt({ ...spot, y: spot.y - 1 }), p.blockAt(spot), p.blockAt({ ...spot, y: spot.y + 1 }),
+        ]);
+        if (!floor.solid || BAD_FOOTING.has(floor.id) || !feet.air || !head.air) continue;
+        // Six seconds, not twelve: the reflex re-fires every four, and a long goal that cannot be
+        // reached just stacks moves until the body starts answering RATE_LIMIT.
+        try { await p.goto(spot, { reach: 1, timeoutMs: 6000 }); }
+        catch { continue; }
+        return `${clouds.length} lingering cloud(s): moved to ${fmtPos(spot)}`;
+      }
     }
   }
-  return null;
+  // A cloud is on us and there is nowhere vetted to go. Say so: the alternative is returning null and
+  // letting the caller report a one-block sidestep as if it had worked.
+  return `${clouds.length} lingering cloud(s) and no clear ground found - staying put and eating`;
 }
 
 export const selfPreservation: Reflex<Danger> = {
