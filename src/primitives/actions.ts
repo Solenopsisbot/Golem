@@ -178,7 +178,30 @@ export async function place(ctx: Ctx, item: string, p: Pos, opts: PlaceOpts = {}
 }
 
 /** Right-click a block face (open a door, use a lever, open a chest) without placing anything specific. */
+/**
+ * Refuse to use an item while a screen is covering the game, and say which screen it is.
+ *
+ * An open screen swallows item use entirely and reports nothing: `use`, `useHold`, `useRelease` and
+ * `shootAt` all return OK and the item is never used. Movement, mining and pathing keep working, so
+ * a body in this state looks healthy from every angle except the one that matters. Two dragon runs
+ * were lost to a PauseScreen nobody could see.
+ *
+ * Container screens are the routine case and `closeScreen` genuinely closes those, so try that
+ * first. Anything still up afterwards is a screen the body cannot dismiss - that is a real fault,
+ * and it gets raised rather than swallowed.
+ */
+async function assertHandsFree(ctx: Ctx, what: string): Promise<void> {
+  if (!ctx.mirror.screen) return;
+  const was = ctx.mirror.screen;
+  await ctx.body.call("closeScreen").catch(() => {});
+  await until(() => !ctx.mirror.screen, { timeoutMs: 1200, intervalMs: 100, what: "closing screen", token: ctx.token })
+    .catch(() => {
+      throw new GolemError("blocked", `cannot ${what}: the screen "${was}" is open and will not close, which silently blocks all item use`);
+    });
+}
+
 export async function useOnBlock(ctx: Ctx, p: Pos, face: Face = "up"): Promise<void> {
+  await assertHandsFree(ctx, `use on ${fmtPos(p)}`);
   await approach(ctx, p);
   await lookAt(ctx, p);
   try { await ctx.body.call("place", { x: p.x, y: p.y, z: p.z, face }); }
@@ -186,11 +209,13 @@ export async function useOnBlock(ctx: Ctx, p: Pos, face: Face = "up"): Promise<v
 }
 
 export async function useItem(ctx: Ctx, hand: "main" | "off" = "main"): Promise<void> {
+  await assertHandsFree(ctx, "use the held item");
   try { await ctx.body.call("use", { hand }); } catch (e) { throw fromClef(e, "use"); }
 }
 
 /** Hold right-click for `ticks` (20 = one second) and let go: bows, tridents, charging anything. */
 export async function useHold(ctx: Ctx, ticks = 25): Promise<void> {
+  await assertHandsFree(ctx, "hold the use key");
   try { await ctx.body.call("useHold", { ticks }); } catch (e) { throw fromClef(e, "useHold"); }
   await sleep(ticks * 50 + 60, ctx.token);
 }
@@ -256,6 +281,7 @@ function needsCombatLoop(ctx: Ctx, cmd: string): void {
  */
 export async function shootAt(ctx: Ctx, target: number | Entity, opts: ShootAtOpts = {}): Promise<CombatResult> {
   needsCombatLoop(ctx, "shootAt");
+  await assertHandsFree(ctx, "shoot");
   const entityId = typeof target === "number" ? target : target.id;
   const args: Record<string, unknown> = { entityId, wait: true };
   if (opts.lead !== undefined) args.lead = opts.lead;

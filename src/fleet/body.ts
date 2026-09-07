@@ -35,6 +35,45 @@ export function ensureBodyConfig(agent: AgentConfig): string {
   return path;
 }
 
+/**
+ * Vanilla client options that a headless body must not be left to choose for itself.
+ *
+ * `pauseOnLostFocus` is the one that matters and it cost two full dragon runs to find. Headless
+ * bodies run on the GLFW null platform, so the window is never focused; the moment the screen
+ * clears - typically the tick after a death screen is dismissed - vanilla opens the pause menu, and
+ * an open PauseScreen silently blocks ALL item use. The bot keeps walking, mining and pathing, so
+ * nothing looks broken: `useHold`/`useRelease`/`shootAt` all return OK and simply do nothing. Tester
+ * fought an entire dragon fight that way, 320 arrows unspent, never firing a shot. Dismissing it is
+ * no help either - the next tick re-opens it - so the option has to be off before the client boots.
+ *
+ * MC rewrites options.txt on exit, so this runs before every launch, not just the first.
+ */
+const FORCED_CLIENT_OPTIONS: Record<string, string> = {
+  pauseOnLostFocus: "false",
+};
+
+/** Force the options in FORCED_CLIENT_OPTIONS into the body's options.txt, preserving the rest. */
+export function ensureClientOptions(agent: AgentConfig): string {
+  const path = resolve(agent.clefDir, "options.txt");
+  mkdirSync(agent.clefDir, { recursive: true });
+  // Absent on a fresh game dir; the client fills in every key it does not find, so a partial file
+  // is fine to write. Keys are `name:value`, one per line, no sections.
+  const lines = existsSync(path) ? readFileSync(path, "utf8").split("\n") : [];
+  const seen = new Set<string>();
+  const out = lines.map((line) => {
+    const key = line.slice(0, line.indexOf(":"));
+    const want = Object.hasOwn(FORCED_CLIENT_OPTIONS, key) ? FORCED_CLIENT_OPTIONS[key] : undefined;
+    if (want === undefined) return line;
+    seen.add(key);
+    return `${key}:${want}`;
+  });
+  for (const [key, value] of Object.entries(FORCED_CLIENT_OPTIONS)) {
+    if (!seen.has(key)) out.push(`${key}:${value}`);
+  }
+  writeFileSync(path, out.join("\n").replace(/\n*$/, "\n"));
+  return path;
+}
+
 /** Copies the launcher jar into data/clef/ (so a rebuild in the sibling repo can't yank it mid-run). */
 export function stageLauncher(agent: AgentConfig): string {
   const src = agent.clef.launcher;
@@ -60,6 +99,7 @@ export function isBodyRunning(agent: AgentConfig): number | null {
 /** Launch the body. Returns the child; stdout/stderr go to data/<agent>/clef.log. */
 export function spawnBody(agent: AgentConfig): ChildProcess {
   ensureBodyConfig(agent);
+  ensureClientOptions(agent);
   const jar = stageLauncher(agent);
   mkdirSync(agent.dataDir, { recursive: true });
   const out = openSync(bodyLogPath(agent), "a");

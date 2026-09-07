@@ -186,6 +186,62 @@ equip {item}    already in the matching armour slot -> no-op, {equipped: item, c
 
 Same for `swapHands`/offhand if it has the same shape.
 
+### 22. A headless body pauses itself, and `closeScreen` cannot un-pause it (confirmed, 2026-09-08)
+
+Two dragon runs were lost to this and it took a live probe to see, because every symptom points
+away from the cause.
+
+**What happens.** `options.txt` ships `pauseOnLostFocus:true`. A headless body runs on the GLFW null
+platform, so its window is never focused. The moment `screen` goes null - reliably the tick after a
+death screen is dismissed, which in a boss fight is often - vanilla opens `PauseScreen`. An open
+screen blocks *all* item use, and nothing reports it:
+
+```
+screen        -> {"screen":"other","screenClass":"PauseScreen", ...}
+useHold {}    -> OK          status.usingItem stays false
+useRelease {} -> OK          arrow count never moves
+shootAt {...} -> OK          zero arrow entities in the world
+```
+
+Movement, mining, pathing and combat *approach* all keep working, so the body looks healthy from
+every angle except the one that matters. Tester fought a full dragon fight in this state with 320
+arrows in the bag and never fired a shot.
+
+**Two separate bugs.**
+
+1. `closeScreen` cannot close it, and says it did:
+
+   ```java
+   d.register("closeScreen", ..., ctx -> ctx.onMain(() -> {
+       if (mc.player != null) mc.player.closeContainer();   // container menus only
+       o.addProperty("closed", true);                        // unconditional
+   }));
+   ```
+
+   `closeContainer()` only closes an `AbstractContainerMenu`. `PauseScreen` is a plain `Screen` set
+   via `setScreen`, so it is untouched - and `closed:true` is hardcoded, so the caller is told it
+   worked. Please make it `mc.setScreen(null)` for non-container screens too, and report the truth:
+
+   ```
+   closeScreen  -> {closed: bool, was: "PauseScreen"|null, still: "PauseScreen"|null}
+   ```
+
+   `clickButton` on the pause menu's own "Back to Game" does not help either - it returns
+   `{"clicked":0,"text":"Back to Game"}` and the screen is straight back on the next tick, which is
+   the tell that this is the focus check re-opening it rather than a stuck screen.
+
+2. Headless mode should force `pauseOnLostFocus:false`, next to where the client already forces
+   `onboardAccessibility=false` and mutes audio in `ClefClient`. A body with no window can never
+   satisfy a focus check, so the option can only ever hurt it.
+
+Golem now seeds `pauseOnLostFocus:false` into the game dir's `options.txt` before every launch,
+which fixes it for bodies Golem spawns. That is a workaround in the wrong repo: anyone running Clef
+headless without Golem still hits it, and it stays silent when they do.
+
+**Worth considering generally:** any command that cannot take effect because a screen is up should
+fail loudly rather than return OK. A no-op that reports success is much more expensive to debug
+than an error.
+
 ## What Baritone already covers (no Clef change needed)
 
 Verified against the bundled Baritone 1.15.0 jar: `axis blacklist build click come eta elytra explore explorefilter farm find follow forcecancel gc goal goto help invert litematica mine path pickup proc reloadall render repack saveall schematica sel set surface thisway tunnel version waypoints`.

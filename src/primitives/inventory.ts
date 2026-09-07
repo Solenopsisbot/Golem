@@ -99,8 +99,15 @@ export async function selectItem(ctx: Ctx, item: string): Promise<number> {
     let r: MoveToHotbarResult;
     try { r = (await ctx.body.call("moveToHotbar", { item: id })) as MoveToHotbarResult; }
     catch (e) { throw fromClef(e, `moveToHotbar ${shortId(id)}`); }
+    // Confirm the swap actually landed, exactly as the clickSlot path below does. Trusting the
+    // reported slot means that if the body ever says "moved" without moving, we select an unrelated
+    // hotbar slot and every later action runs with the wrong item in hand, reporting success.
+    // Note the move is a SWAP: whatever was in `r.slot` goes back to where this item came from.
     await ctx.body.call("setSlot", { slot: r.slot });
     ctx.mirror.selectedSlot = r.slot;
+    await until(async () => (await inventory(ctx)).hotbar()[r.slot]?.item === id,
+      { timeoutMs: 1500, intervalMs: 150, what: `moving ${shortId(id)} to hotbar`, token: ctx.token })
+      .catch(() => { throw new GolemError("failed", `the body reported ${shortId(id)} moved to hotbar slot ${r.slot}, but it is not there`); });
     return r.slot;
   }
   if (ctx.mirror.screen) {
