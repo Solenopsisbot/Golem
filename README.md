@@ -7,7 +7,7 @@ The body stays alive on its own; the mind decides what to do with the life.
 
 - Connects an [ACP](https://agentclientprotocol.com)-speaking coding agent to a
   headless Minecraft client as a character with a persona, a memory, and goals.
-  Claude Code is what's tested; anything that speaks ACP should work.
+  Claude Code is what's tested; OpenAI Codex works too through `adapters/codex-acp.ts` (see `docs/CONFIG.md`), and anything else that speaks ACP should slot in.
 - Keeps the character alive without the model: reflexes (eat, flee, fight, respawn)
   run deterministically at 250 ms with no API calls.
 - Gives the mind **Shem**, a small scripting language over Minecraft primitives so

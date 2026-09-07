@@ -99,4 +99,14 @@ reflexes.on = ["self_preservation", "unstuck", "self_defense", "hunting", "auto_
 
 ## Running a different mind (Codex)
 
-`golem.codex.toml` is a template for OpenAI Codex as the mind, via Zed's ACP adapter (`@zed-industries/codex-acp`). It sets `mind.command`/`args` to the adapter, `permission_mode = "full-access"`, and `mind.models` to the model and reasoning effort. Point `mind.env.CODEX_HOME` at an isolated dir (with its own `config.toml` and a symlinked `auth.json`) to keep your global Codex model default and skills out of the fleet. Tested on gpt-5.5 at low effort; gpt-6-astra needs a Codex ACP adapter newer than 0.16.0.
+`golem.codex.toml` runs OpenAI Codex as the mind through `adapters/codex-acp.ts`, a small
+Golem-owned ACP adapter bridging ACP to `codex app-server` (the installed `codex` CLI's JSON-RPC
+protocol). It drives your installed codex, so any model that codex supports works, including ones
+newer than Zed's `@zed-industries/codex-acp` bundles. Set `mind.command = "node"`, `args =
+["adapters/codex-acp.ts"]` (the loader resolves it to an absolute path), and `permission_mode =
+"full-access"`. The adapter maps ACP prompts to codex `turn/start`, streams text and MCP tool calls
+back, and auto-accepts codex's tool-consent elicitations and approvals. It needs `codex` on `PATH`
+(`GOLEM_CODEX_BIN` overrides). Set `mind.env.CODEX_HOME` to an isolated dir (its own `config.toml`
+plus a symlinked `auth.json`) to keep your global model default and skills out of the fleet;
+`GOLEM_CODEX_MODEL`/`GOLEM_CODEX_EFFORT` seed the first turn. Reasoning effort is a live ACP config
+option, so two-tier routing switches it per turn. Tested end to end on gpt-5.5 and gpt-6-astra.

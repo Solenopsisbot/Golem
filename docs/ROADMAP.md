@@ -37,3 +37,7 @@ Top-down map, annotated screenshots, blueprints and `build`, Ayusami persona bri
 
 ## M6: Beat the game (in progress, started 2026-09-07)
 The finish line is the ender dragon. Everything the minds need is a capability, not intelligence: they reached diamonds unaided in one evening. Landed: bow primitives (`shoot`, `use_hold`, `use_release` on the body's hold-and-release), dimension-aware reflexes (no bunker in the End, no bunker over lava), eval vocabulary for other dimensions (`dimension` and `rcon` predicates; `dimension`, `locate`, `summon` setup), and the ladder in `tasks/endgame/`: nether portal, blaze rod, ender pearl, eye of ender, stronghold, dragon. Each rung is run on its own with the gear the previous rung would have produced, so a failure is one capability, not a whole run. Landed: library scripts `lib/nether` (build/light/enter a portal), `lib/ender` (throw and follow eyes, safe stair/tunnel down, find the portal room, fill the frames, enter the End) and `lib/dragon` (shoot the crystals, melee-and-bow the dragon). Open: a full run from nothing up the ladder, on a normal-difficulty server, fixing what breaks.
+
+## Minds beyond Claude Code
+
+`adapters/codex-acp.ts` is a Golem-owned ACP adapter over `codex app-server`, so OpenAI Codex (the installed CLI, any model it supports including gpt-6-astra) can be the mind. Proven end to end: session, MCP tools, streaming, chat. The ACP client in `src/mind/acp.ts` is unchanged; a mind is just a `command`/`args` in config.

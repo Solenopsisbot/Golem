@@ -59,6 +59,13 @@ export function resolveAgent(loaded: LoadedConfig, name: string): AgentConfig {
   const attach = a.body.attach ? parseHostPort(a.body.attach, clef.base_port) : undefined;
   const port = a.body.port ?? attach?.port ?? clef.base_port + index;
   const reflexesOn = a.reflexes?.on ?? config.reflexes.default_on;
+  // Resolve repo-relative mind script args (adapters/foo.ts) to absolute paths: the mind is spawned
+  // with cwd set to the agent workspace, so a bare relative path wouldn't resolve.
+  const rawMind = { ...config.mind, ...defined(a.mind) };
+  const mindArgs = (rawMind.args ?? []).map((arg) => {
+    if (/\.(ts|js|mjs|cjs)$/.test(arg) && !arg.startsWith("/")) { const abs = resolve(rootDir, arg); if (existsSync(abs)) return abs; }
+    return arg;
+  });
   return {
     name: a.name,
     index,
@@ -79,7 +86,7 @@ export function resolveAgent(loaded: LoadedConfig, name: string): AgentConfig {
       max_heap: a.body.max_heap ?? clef.max_heap,
     },
     clef: { ...clef, launcher: resolve(rootDir, clef.launcher) },
-    mind: { ...config.mind, ...defined(a.mind), budget: { ...config.mind.budget, ...defined(a.mind?.budget) }, models: { plan: { ...config.mind.models.plan, ...defined(a.mind?.models?.plan) }, act: { ...config.mind.models.act, ...defined(a.mind?.models?.act) } } },
+    mind: { ...config.mind, ...defined(a.mind), args: mindArgs, budget: { ...config.mind.budget, ...defined(a.mind?.budget) }, models: { plan: { ...config.mind.models.plan, ...defined(a.mind?.models?.plan) }, act: { ...config.mind.models.act, ...defined(a.mind?.models?.act) } } },
     drive: { ...config.drive, ...defined(a.drive) },
     chat: { ...config.chat, ...defined(a.chat) },
     players: config.players,
