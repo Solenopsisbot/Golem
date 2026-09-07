@@ -46,7 +46,27 @@ Rungs 3-4 now pass too. The ender pearl (kill endermen, collect a pearl, in a sk
 
 Rung 5 (stronghold) is close but unsolved. The bot now survives the dive (0 deaths, after a lava/drown/mob death loop earlier) and navigates well: it threw eyes, followed them ~230 blocks, wrote its own descend script and dug down to the portal-room depth. What it can't yet do is finish inside the 40-minute budget: hand-digging and searching for the portal room eats the whole clock before it fills the frames. That needs efficient stronghold traversal, not more setup. Two harness fixes landed on the way: after a `locate` the bot's spawnpoint is set beside the structure (a death no longer strands it hundreds of blocks away), and keepInventory keeps its eyes through deaths.
 
-Open: make stronghold traversal fast enough to finish, and rung 6 (the dragon: crystals then the boss), which is untried.
+Rung 5 (stronghold) now passes: the End in 18 minutes where it used to time out at 43. The cause was
+that `dig_down` was registered as a stub, so the library index told the mind it was NOT IMPLEMENTED and
+`stairs_down`'s doc said "never straight down" - so the mind hand-cut a spiral staircase, three mines and
+a path-find per block, ~80 blocks deep, never scanning for the portal on the way. One turn ran 41 minutes.
+`dig_down` is now real (one swing per block, stops rather than dying at lava or a long drop) and
+`lib/ender dive_for_portal` sinks a bounded distance while scanning 64 blocks for the frames - in the
+passing run it spotted them from 61 blocks away. Two engine bugs fell out of the same rung: portals
+counted as "solid", so `goto` bumped its reach and parked the body *beside* the portal ("stood on the
+portal but did not go"); and `equip()` on armour you are already wearing took it off, because the body's
+equip is a shift-click out of the player inventory and the armour slots are part of it - a mind that
+re-equipped its armour each turn undressed itself and fought at 0 armour points.
+
+Rung 6 (the dragon) is blocked on the world, not the bot. A `/summon`ed ender dragon has no
+EnderDragonFight controller: it hovers exactly where it is put, never circles, perches or attacks, so
+there is no fight to win and no perch to melee. This world's End has no exit portal either, so the
+vanilla four-crystal respawn cannot trigger. Running it needs an End that still has its dragon (or a
+regenerated one). The attempt did surface a real capability gap worth fixing first: `aimed_shot` leads
+the target not at all, so against anything that moves the arrows simply miss - 240 arrows put 2.5 damage
+on a dragon. Bow work (sample velocity, predict arrow flight) is the prerequisite for a boss fight.
+
+Open: lead-predicting bow aim, and rung 6 against a real dragon.
 
 ## Minds beyond Claude Code
 

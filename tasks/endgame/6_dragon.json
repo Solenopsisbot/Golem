@@ -1,13 +1,13 @@
 {
   "name": "dragon",
-  "description": "Kill the ender dragon in the End.",
-  "goal": "You are on the End island with a bow, arrows, a diamond sword, diamond armour and a carved pumpkin already worn on your head. The pumpkin is why endermen ignore you - do NOT take it off or swap it for a helmet. Kill the ender dragon. Start a snippet with `use \"lib/dragon\"`: `shoot_crystals()` destroys the end crystals on the pillars (they heal the dragon, so they go first - it returns how many it got), then `fight_dragon()` melees the dragon when it perches on the fountain and shoots it with the bow while it flies. Keep each call short and check your health between calls; eat or use a golden apple below half health. Never dig down here - below the island is the void. Say 'dragon dead' when it dies.",
+  "description": "Kill the ender dragon in the End. NEEDS A REAL DRAGON: a /summon'ed ender_dragon has no EnderDragonFight controller, so it hovers motionless where you put it and never circles, perches or attacks - an inert 200 hp target, not a fight. Use a world whose End still has its dragon, or respawn one properly with four end crystals on the exit portal. The summon below is a placeholder for that.",
+  "goal": "You are on the End island with a bow, arrows, a diamond sword, diamond armour and a carved pumpkin already worn on your head. The pumpkin is why endermen ignore you - do NOT take it off or swap it for a helmet. Kill the ender dragon. Start a snippet with `use \"lib/dragon\"`: `shoot_crystals()` destroys the end crystals on the pillars (they heal the dragon, so they go first - it returns how many it got), then `fight_dragon()` melees the dragon when it perches on the fountain and shoots it with the bow while it flies. Keep each call short and check your arrows and health between calls; eat or use a golden apple below half health. Never dig down here - below the island is the void. Say 'dragon dead' when it dies. You have 320 arrows: spend them on the dragon, and do not keep firing at a crystal that is caged in iron bars - break the cage or leave it.",
   "timeout_s": 3000,
   "setup": {
     "clear_inventory": true,
     "give": [
       "bow",
-      "arrow 128",
+      "arrow 320",
       "diamond_sword",
       "diamond_chestplate",
       "diamond_leggings",
@@ -23,7 +23,8 @@
       "execute in minecraft:the_end run forceload add -32 -32 32 32",
       "execute in minecraft:the_end run kill @e[type=minecraft:enderman]",
       "execute in minecraft:the_end run kill @e[type=minecraft:ender_dragon]",
-      "execute in minecraft:the_end run summon minecraft:ender_dragon 0 80 0"
+      "execute in minecraft:the_end run summon minecraft:ender_dragon 0 80 0",
+      "execute in minecraft:the_end run kill @e[type=minecraft:end_crystal,limit=7]"
     ]
   },
   "success": [
