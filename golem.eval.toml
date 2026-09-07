@@ -26,7 +26,7 @@ persona = "personas/clay.md"
 model = "opus"
 effort = "high"
 
-# The dragon rung needs a fighter that runs between turns, not just a planner. dragon_fight is off by
-# default (it is only useful in the End); the endgame ladder turns it on.
+# Stock reflexes only. dragon_fight exists and is documented in the library index, but switching it on
+# is the agent's decision to make (reflex_set), not the fixture's to make for it.
 [reflexes]
-default_on = ["auto_respawn", "bunker", "self_preservation", "unstuck", "auto_eat", "item_collecting", "idle_staring", "dragon_fight"]
+default_on = ["auto_respawn", "bunker", "self_preservation", "unstuck", "auto_eat", "item_collecting", "idle_staring"]

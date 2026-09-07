@@ -129,9 +129,10 @@ export class EvalRunner {
     // Armour in the give list is worn, not just dropped in the bag: with keepInventory a bot that
     // starts and respawns already armoured can survive the opening seconds of a swarm long enough to
     // fight back, instead of dying unarmoured before it can equip anything.
-    // carved_pumpkin is head gear too, and the reason to want it: wearing one stops endermen reacting
-    // to being looked at, which is what a bot aiming a bow in the End does constantly.
-    const ARMOR: Record<string, string> = { helmet: "head", chestplate: "chest", leggings: "legs", boots: "feet", carved_pumpkin: "head" };
+    // Armour only. A carved pumpkin is head gear mechanically, but wearing one is a *tactic* (endermen
+    // ignore a pumpkin-wearer's gaze), and pre-wearing it hands the agent the answer to the End's main
+    // hazard. Give it in the bag and let the agent work out what it is for.
+    const ARMOR: Record<string, string> = { helmet: "head", chestplate: "chest", leggings: "legs", boots: "feet" };
     const wear: { slot: string; item: string }[] = [];
     for (const g of s.give) {
       const bare = g.split(/\s+/)[0]!.replace(/^minecraft:/, "");

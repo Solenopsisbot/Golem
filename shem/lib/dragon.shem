@@ -1,39 +1,8 @@
 // The End: shoot the crystals, then the dragon.
-
-/// Shoot a moving target where it is going to BE, not where it is.
-///
-/// A fully drawn arrow travels roughly 53 blocks a second, so a dragon 40 blocks away gets most of a
-/// second to move before the arrow arrives. Aiming straight at it is why 240 arrows put 2.5 damage on
-/// a dragon and the rest on the floor. This samples the target twice to get its velocity, leads it by
-/// the flight time, and adds lift for the drop. Returns false when the target is not in sight.
-script lead_shot(kind: string = "ender_dragon", radius: float = 140): bool {
-  let a = nearest(kind, radius)
-  if (a == none) return false
-  let p1 = a.pos
-  // Draw FIRST, then aim. A full draw is ~1.3 s, and a dragon covers twenty blocks in that time, so
-  // aiming before the pull means the arrow looses at where the target used to be. Pulling first also
-  // gives the two position samples the velocity estimate needs, for free.
-  equip("bow")
-  look_at(p1)          // rough aim while pulling, so the head is already in the right region
-  use_hold(25)
-  let b = nearest(kind, radius)
-  if (b == none) { use_release(); return false }
-  let p2 = b.pos
-  // The samples are one draw apart (~1.3 s); scale that to blocks per second.
-  let vx = (p2.x - p1.x) / 1.3
-  let vy = (p2.y - p1.y) / 1.3
-  let vz = (p2.z - p1.z) / 1.3
-  let d = p2.dist(here)
-  let t = d / 53.0
-  // Real drop, not a guess: a Minecraft arrow falls at 20 blocks/s^2, so over the flight time t it
-  // drops 10*t^2. At 30 blocks that is 3.2 down - the old fixed 0.05-per-block fudge aimed a metre
-  // and a half under the target and put every arrow in the floor.
-  let drop = 10.0 * t * t
-  look_at(vec(p2.x + vx * t, p2.y + vy * t + drop, p2.z + vz * t))
-  wait 120ms           // let the new rotation reach the server; the arrow leaves along it, not before
-  use_release()
-  return true
-}
+//
+// The generic fighting pieces (kit_up, eat_if_hurt, lead_shot, back_off) live in lib/combat; only the
+// crystals-then-boss shape is dragon-specific.
+use "lib/combat"
 
 /// One bow shot at an entity, aimed `lift` blocks above it for the arrow's drop.
 script aimed_shot(e: entity, lift: float = 0) {

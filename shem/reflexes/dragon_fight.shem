@@ -1,3 +1,4 @@
+use "lib/combat"
 use "lib/dragon"
 
 /// Fight the ender dragon in real time, between the mind's turns. Off by default.
@@ -18,11 +19,7 @@ reflex dragon_fight priority 93 on tick when dimension == "the_end" and nearest(
     // fight at height ends as fall damage, not as a dead dragon. goto walks, it does not jump off.
     try { goto(pos(0, 63, 0), reach: 6, timeout: 10s) } catch (e) { log "descend: ${e.kind}" }
   } else {
-    if (health <= 12) {
-      try { eat("golden_apple") } catch (e) {
-        try { eat_something() } catch (e2) { log "nothing to eat: ${e2.kind}" }
-      }
-    }
+    eat_if_hurt(12)
     let d = nearest("ender_dragon", 120)
     if (d != none) {
       // How far the dragon is from the fountain, horizontally. It perches on the fountain at
@@ -30,18 +27,14 @@ reflex dragon_fight priority 93 on tick when dimension == "the_end" and nearest(
       let off = max(abs(d.pos.x), abs(d.pos.z))
       if (health <= 6) {
         // Losing the trade. Break contact along the ground; dying costs the gear and the position.
-        try { flee(d, 18) } catch (e) { log "flee: ${e.kind}" }
+        back_off(d, 18)
       } else if (d.pos.y < 71 and off < 12) {
         // It has come down to perch. That is the whole fight: a perched dragon holds still and takes
         // full sword damage, where arrows at a circling one mostly miss. Walk to the fountain FLOOR -
         // never to d.pos, which is its body several blocks up, and a mid-air goal builds the tower.
         try { goto(pos(0, 63, 0), reach: 5, timeout: 6s) } catch (e) { log "close: ${e.kind}" }
         try { attack(d, timeout: 6s) } catch (e) { log "melee: ${e.kind}" }
-      } else if (d.dist > 40) {
-      // Too far to shoot well: lead and drop errors both grow with range, and a wasted arrow is a
-      // wasted six seconds. Close the gap instead and shoot from where the shot is worth taking.
-      try { goto_xz(d.pos.x, d.pos.z, reach: 6) } catch (e) { log "close in: ${e.kind}" }
-    } else if (inventory.count("arrow") > 0) {
+      } else if (inventory.count("arrow") > 0) {
         // Out of reach: lead it. Aiming where it already is puts arrows in the floor.
         repeat (6) {
           if (inventory.count("arrow") < 1) break

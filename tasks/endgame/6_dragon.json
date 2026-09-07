@@ -1,7 +1,7 @@
 {
   "name": "dragon",
-  "description": "Kill the ender dragon in the End. Needs a world whose End still has its dragon: a /summon'ed ender_dragon has no EnderDragonFight controller, so it hovers motionless and never circles, perches or attacks. This rung relies on the real fight, so it must not summon one.",
-  "goal": "You are on the End island near the bedrock fountain, wearing diamond armour and a carved pumpkin (the pumpkin is why endermen ignore you - do NOT take it off). Kill the ender dragon.\nThe `dragon_fight` reflex does the actual fighting for you, on the 250ms tick: it heals, breaks contact when it is losing, melees the dragon when it perches and leads it with the bow when it flies. A planning turn takes far longer than the dragon takes to kill you, so swinging is not your job.\nYour job: check the reflex is on (reflex_set dragon_fight on), stay near the fountain so you are in reach when it perches, keep arrows and golden apples to hand, and watch. Expect your own tool calls to be preempted by the reflex - that is it working, not an error. Do not run long scripts that try to fight the dragon yourself; you will only take the body away from the reflex. There are no crystals left, so every hit sticks and its health never comes back. Never dig down here - below the island is the void. Say 'dragon dead' when it is gone.",
+  "description": "Kill the ender dragon in the End. Needs a world whose End still has its dragon: a /summon'ed ender_dragon has no EnderDragonFight controller and just hovers. The fixture gives gear, a real fight and a recoverable respawn; it does NOT clear the crystals, remove the endermen, place the bot in the right spot or tell it the tactics - that is the rung.",
+  "goal": "You are in the End. Kill the ender dragon, then say 'dragon dead'.\nYou have a bow and arrows, a diamond sword, diamond armour, a carved pumpkin, food, golden apples, blocks and ender pearls. The standard library has `lib/dragon` (shoot_crystals, fight_dragon) and `lib/combat` (kit_up, eat_if_hurt, lead_shot, back_off, hold_ground), and there is an optional `dragon_fight` reflex you can switch on with reflex_set if you want the body fighting between your turns. Whether and how you use any of that is your call.\nOne hard rule, because it is unrecoverable rather than tactical: never dig down here - below the island is the void.",
   "timeout_s": 7200,
   "setup": {
     "clear_inventory": true,
@@ -9,6 +9,7 @@
       "bow",
       "arrow 320",
       "diamond_sword",
+      "diamond_helmet",
       "diamond_chestplate",
       "diamond_leggings",
       "diamond_boots",
@@ -20,11 +21,7 @@
     ],
     "dimension": "the_end",
     "commands": [
-      "execute in minecraft:the_end run forceload add -32 -32 32 32",
-      "execute in minecraft:the_end run kill @e[type=minecraft:enderman]",
-      "execute in minecraft:the_end run kill @e[type=minecraft:end_crystal,limit=7]",
-      "execute in minecraft:the_end run tp {bot} 10.5 65 0.5",
-      "execute in minecraft:the_end run spawnpoint {bot} 10 65 0"
+      "execute in minecraft:the_end run forceload add -32 -32 32 32"
     ]
   },
   "success": [

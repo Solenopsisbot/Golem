@@ -159,6 +159,33 @@ Both should honour `pause`/`cancel` so a reflex can take the body back. With the
 that already works for movement: the mind decides *fight that*, a reflex decides *it has perched, melee*,
 and the body does the 20 Hz work.
 
+### 20. Entity velocity in `entities` (small, unblocks aiming anywhere)
+
+`entities` returns position but not motion, so anything that wants to lead a target has to sample the
+same entity twice and divide by a wall-clock guess. Over the wire that guess is wrong: the gap between
+two calls is whatever the network gave you, and the error goes straight into the aim. The client has
+`Entity.getVelocity()` sitting right there.
+
+```
+entities {...}  ->  [{... , vx: double, vy: double, vz: double}]   blocks per tick, as the client has it
+```
+
+Cheap, and it makes decent aiming possible from Shem even before #19 lands.
+
+### 21. Idempotent armour equip
+
+`equip` is a shift-click out of the player inventory, and the armour slots are part of that inventory —
+so asking to wear a piece that is already worn quick-moves it back OFF. A mind that defensively
+re-equipped its armour each turn undressed itself and fought a boss at zero armour points with the
+gear in its bag. Golem now guards this client-side by checking `status.player.armor` first, but the
+body is the right place for it.
+
+```
+equip {item}    already in the matching armour slot -> no-op, {equipped: item, changed: false}
+```
+
+Same for `swapHands`/offhand if it has the same shape.
+
 ## What Baritone already covers (no Clef change needed)
 
 Verified against the bundled Baritone 1.15.0 jar: `axis blacklist build click come eta elytra explore explorefilter farm find follow forcecancel gc goal goto help invert litematica mine path pickup proc reloadall render repack saveall schematica sel set surface thisway tunnel version waypoints`.

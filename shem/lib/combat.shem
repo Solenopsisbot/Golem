@@ -1,0 +1,96 @@
+/// Fighting and staying alive: the parts that aren't specific to any one enemy.
+///
+/// Kept separate from `lib/dragon` because none of it is about dragons — kitting up, eating when
+/// hurt, leading a moving target and backing off a losing trade are the same jobs whether the thing
+/// in front of you is a blaze, an enderman or a boss.
+
+/// Wear or hold the first item from `options` that is in the bag; put the best one first.
+/// Returns what it took, or "" if none of them were there.
+script wear_best(options: any): string {
+  for (o of options) {
+    if (inventory.count(o) > 0) {
+      try { equip(o); return o } catch (e) { log "equip ${o}: ${e.kind}" }
+    }
+  }
+  return ""
+}
+
+/// Put on the best armour in the bag and hold the best weapon. Safe to call repeatedly: equipping a
+/// piece you already wear is a no-op, so this can sit at the top of a fight loop.
+/// Returns how many armour slots ended up filled.
+script kit_up(): int {
+  let worn = 0
+  if (wear_best(["netherite_helmet", "diamond_helmet", "iron_helmet", "chainmail_helmet", "golden_helmet", "leather_helmet"]) != "") worn = worn + 1
+  if (wear_best(["netherite_chestplate", "diamond_chestplate", "iron_chestplate", "chainmail_chestplate", "golden_chestplate", "leather_chestplate"]) != "") worn = worn + 1
+  if (wear_best(["netherite_leggings", "diamond_leggings", "iron_leggings", "chainmail_leggings", "golden_leggings", "leather_leggings"]) != "") worn = worn + 1
+  if (wear_best(["netherite_boots", "diamond_boots", "iron_boots", "chainmail_boots", "golden_boots", "leather_boots"]) != "") worn = worn + 1
+  wear_best(["netherite_sword", "diamond_sword", "iron_sword", "stone_sword", "golden_sword", "wooden_sword"])
+  return worn
+}
+
+/// Eat when hurt: a golden apple if there is one (it heals and buys absorption), else ordinary food.
+/// Returns true if something was eaten.
+script eat_if_hurt(below: float = 12): bool {
+  if (health > below) return false
+  if (inventory.count("golden_apple") > 0) {
+    try { eat("golden_apple"); return true } catch (e) { log "gapple: ${e.kind}" }
+  }
+  try { eat_something(); return true } catch (e) { log "eat: ${e.kind}" }
+  return false
+}
+
+/// Shoot a moving target where it is going to BE, not where it is. Returns false if it is not in sight.
+///
+/// Two things make this work and both are easy to get wrong. Draw FIRST and aim second: a full draw is
+/// about 1.3 s, and anything worth leading has moved by the time the arrow leaves, so aiming before the
+/// pull looses at a ghost. And compensate the real drop: a Minecraft arrow falls at 20 blocks/s^2, so
+/// over flight time t it drops 10*t^2 — three blocks at thirty out, where a fixed fudge factor puts
+/// every shot in the floor.
+script lead_shot(kind: string = "ender_dragon", radius: float = 140): bool {
+  if (inventory.count("bow") < 1) return false
+  if (inventory.count("arrow") < 1) return false
+  let a = nearest(kind, radius)
+  if (a == none) return false
+  let p1 = a.pos
+  equip("bow")
+  look_at(p1)          // rough aim while pulling, so the head starts in the right region
+  use_hold(25)
+  let b = nearest(kind, radius)
+  if (b == none) { use_release(); return false }
+  let p2 = b.pos
+  // The two samples are one draw apart (~1.3 s); scale that to blocks per second.
+  let vx = (p2.x - p1.x) / 1.3
+  let vy = (p2.y - p1.y) / 1.3
+  let vz = (p2.z - p1.z) / 1.3
+  let d = p2.dist(here)
+  let t = d / 53.0
+  let drop = 10.0 * t * t
+  look_at(vec(p2.x + vx * t, p2.y + vy * t + drop, p2.z + vz * t))
+  wait 120ms           // let the rotation reach the server; the arrow leaves along it, not before
+  use_release()
+  return true
+}
+
+/// Break contact with something that is winning. Cheaper than dying: gear and position both survive.
+script back_off(threat: any, dist: float = 16): bool {
+  try { flee(threat, dist); return true } catch (e) { log "back off: ${e.kind}"; return false }
+}
+
+/// Stand and fight whatever of `kinds` is nearest, for up to `seconds`, retreating below `flee_below`
+/// health and eating on the way. Returns how many swings landed.
+script hold_ground(kinds: any = none, radius: float = 12, flee_below: float = 7, seconds: dur = 20s): int {
+  let hits = 0
+  timeout seconds {
+    while (true) {
+      eat_if_hurt(flee_below + 6)
+      let t = nearest(kinds, radius)
+      if (t == none) break
+      if (health <= flee_below) { back_off(t, 16); break }
+      try {
+        let r = attack(t, timeout: 6s)
+        hits = hits + r.hits
+      } catch (e) { log "swing: ${e.kind}"; break }
+    }
+  }
+  return hits
+}
