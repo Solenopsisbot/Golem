@@ -28,6 +28,13 @@ export const TaskSchema = z.object({
   timeout_s: z.number().min(30).max(7200).default(600),
   /** Fresh mind session per task (default) so earlier tasks don't leak context. */
   fresh_session: z.boolean().default(true),
+  /**
+   * Archive the agent's own shem/ scripts before the run, so it starts from the shipped library.
+   * A fresh mind with a workspace full of its previous attempts is not a fresh run: the scripts are
+   * listed in its orientation, so run N inherits run N-1's habits and the results stop comparing.
+   * Off by default — accumulating scripts is the point in normal play, just not in a measurement.
+   */
+  fresh_workspace: z.boolean().default(false),
   setup: z.object({
     /** Server commands via RCON, run in order before the task. `{bot}` is replaced with the bot's username. */
     commands: z.array(z.string()).default([]),

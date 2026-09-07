@@ -1,6 +1,6 @@
 // The eval runner: for each task, reset the world over RCON, start a session with a fresh mind,
 // hand the goal over as an owner message, watch the predicates, record the result.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { AgentSession } from "../agent/session.ts";
 import type { LoadedConfig } from "../config/load.ts";
@@ -215,12 +215,30 @@ export class EvalRunner {
     return { ok, detail: details.join("; ") };
   }
 
+  /**
+   * Move the agent's own scripts aside so a rung starts from the shipped library. Archived rather
+   * than deleted: what it wrote last time is evidence about the run, and deleting evidence to tidy a
+   * fixture is a bad trade.
+   */
+  private archiveScripts(agent: { workspaceDir: string; name: string }, t0: number): void {
+    const dir = resolve(agent.workspaceDir, "shem");
+    if (!existsSync(dir)) return;
+    const scripts = readdirSync(dir).filter((f) => f.endsWith(".shem"));
+    if (!scripts.length) return;
+    const into = resolve(dir, `_archive-${new Date(t0).toISOString().replace(/[:.]/g, "-")}`);
+    mkdirSync(into, { recursive: true });
+    for (const f of scripts) renameSync(resolve(dir, f), resolve(into, f));
+    log.info(`archived ${scripts.length} of ${agent.name}'s scripts to ${into}; the rung starts from the library`);
+  }
+
   async run(task: Task): Promise<TaskResult> {
     const { agentName, loaded, host } = this.opts;
     const agent = resolveAgent(loaded, agentName);
     const t0 = Date.now();
     const said: string[] = [];
     let deaths = 0, turns = 0, toolCalls = 0, tokens = 0, lastContext = 0;
+    // Before the session starts, because orientation reads the workspace and lists what it finds.
+    if (task.fresh_workspace) this.archiveScripts(agent, t0);
     const session = await AgentSession.start(agent, host, { waitForBodyMs: 900_000, orient: false, freshMind: task.fresh_session && (this.opts.fresh ?? true) });
     this.active = session;
     // Count as things happen: the final turn is usually still running when the predicate passes.
