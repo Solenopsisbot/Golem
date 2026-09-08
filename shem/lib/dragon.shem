@@ -68,7 +68,20 @@ script fight_dragon(rounds: int = 400): bool {
       } else if (inventory.count("arrow") > 0 and d.dist < 45) {
         try { lead_shot("ender_dragon", 45, 3) } catch (e) { log "shot: ${e.kind}" }
       } else {
-        try { timeout 20s { goto_xz(0, 0, reach: 6) } } catch (e) { log "to the fountain: ${e.kind}" }
+        // Do NOT camp the fountain waiting for it to land. Measured: a bot standing still at (0,63,0)
+        // holds the dragon in DragonPhase 1 (STRAFE_PLAYER) indefinitely - 45 samples out of 45 over
+        // ninety seconds - and holding pattern is the only phase that rolls for a landing. Strafe
+        // only ends when it closes to about ten blocks and fires, and it circles at y 85, so from the
+        // fountain floor it never gets close enough to finish. Camping the perch is what prevents the
+        // perch.
+        //
+        // So wait out at range instead. It drops the target, returns to holding pattern, and with one
+        // crystal left rolls roughly one in four per circuit to come down.
+        if (dragon_offset() > 20 and d.dist > 40) {
+          wait 2s
+        } else {
+          try { timeout 20s { goto_xz(int(here.x * 3), int(here.z * 3), reach: 6) } } catch (e) { log "back off: ${e.kind}" }
+        }
       }
     }
     wait 500ms
