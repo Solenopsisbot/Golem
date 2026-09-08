@@ -468,7 +468,14 @@ export class EvalRunner {
       deaths = 0;
       await session.rt.mirror.refresh();
       session.drive.goal = task.goal;
-      session.drive.push({ kind: "goal", priority: 80, from: loaded.config.players.owners[0] ?? "eval", text: `${loaded.config.players.owners[0] ?? "eval"} set your goal: ${task.goal}` });
+      // Say plainly that nobody is listening. An eval pushes a goal and then never speaks again, but
+      // nothing in the prompt says so, and a mind that reasonably asks a question then waits for the
+      // answer burns the rest of the clock standing still. Tester did exactly that on the hard rung:
+      // "I'm holding here in the portal room, geared with nothing, waiting on your call" - a sensible
+      // thing to say to an operator, and there was no operator.
+      const owner = loaded.config.players.owners[0] ?? "eval";
+      const unattended = "\n\nThis is an unattended run. Nobody is watching and nothing you ask will be answered, so make every call yourself and keep going until the goal is met or the time is up.";
+      session.drive.push({ kind: "goal", priority: 80, from: owner, text: `${owner} set your goal: ${task.goal}${unattended}` });
       const deadline = t0 + task.timeout_s * 1000;
       while (Date.now() < deadline && !this.aborted) {
         await new Promise((r) => setTimeout(r, 5000));
