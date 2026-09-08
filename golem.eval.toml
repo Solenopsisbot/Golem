@@ -29,9 +29,16 @@ persona = "personas/clay.md"
 # Fable is the cheaper, faster planner. If its usage limit is exhausted every planning turn errors
 # out and the rung degrades to act-only, so watch for that in the log rather than wondering why it
 # has gone quiet.
-[mind.models.plan]
-model = "fable"
-effort = "medium"
+# Act on Fable too, not just plan.
+#
+# Routing only the planning tier missed the point: act turns are the majority and they were still on
+# opus. Measured on the hard rung, one act turn ran 1524 seconds for 17 tool calls and another 786
+# for 6, which is three or four turns an hour and nowhere near enough to clear the crystals and fight
+# the dragon inside the clock. Act turns here are mechanical - run the script, read the result - and
+# do not repay that kind of deliberation.
+[mind.models]
+plan = { model = "fable", effort = "medium" }
+act = { model = "fable", effort = "low" }
 
 # Stock reflexes only. dragon_fight exists and is documented in the library index, but switching it
 # on is the agent's decision to make (reflex_set), not the fixture's to make for it.
