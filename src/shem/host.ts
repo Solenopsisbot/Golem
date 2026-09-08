@@ -138,6 +138,12 @@ export function makeShemHost(rt: AgentRuntime): Host {
     const r = await p.shootAt(id, { shots: toNum(arg(a, n, 1, "shots") ?? 1), lead: arg(a, n, 2, "lead") !== false, charge: toNum(arg(a, n, 3, "charge") ?? 25), maxRange: toNum(arg(a, n, 4, "max_range") ?? 64) });
     return { fired: r.fired, hits: r.hits, damage: r.damage, killed: r.killed, stopped: r.stopped, ticks: r.ticks };
   });
+  def("require_dimension", (p, a, n) => {
+    const want = toStr(arg(a, n, 0, "name") ?? "").replace("minecraft:", "");
+    const have = p.ctx.mirror.dimension.replace("minecraft:", "");
+    if (have !== want) throw new Error(`this script is for the ${want.replace(/_/g, " ")} and you are in the ${have.replace(/_/g, " ")}`);
+    return have;
+  });
   def("pearl_to", async (p, a, n) => {
     const t = arg(a, n, 0, "pos");
     const tp = (t as { pos?: { x: number; y: number; z: number } })?.pos ?? t;

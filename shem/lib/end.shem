@@ -6,6 +6,14 @@
 
 use "lib/combat"
 
+/// Refuse to run anywhere but the End.
+///
+/// Everything below holds End coordinates, and the three worlds share a coordinate space, so a script
+/// written on the island runs perfectly happily in the overworld and walks you two hundred blocks to
+/// nothing. Dying is what does it: you write the plan in the End and wake up somewhere else with the
+/// plan still in hand. `require_dimension` at the top of anything with hardcoded coordinates.
+script in_the_end(): string { return require_dimension("the_end") }
+
 /// Where to stand to have a clear shot at a crystal on a pillar. Returns a ground position.
 ///
 /// NOT underneath it. The pillar is in the way and no arc gets over it: from four blocks out, the
