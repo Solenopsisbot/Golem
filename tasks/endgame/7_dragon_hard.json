@@ -1,13 +1,18 @@
 {
   "name": "dragon_hard",
   "description": "Kill the ender dragon with no keepInventory: dying drops everything where you fell, and the way back is a portal room in the overworld. Needs a world whose End still has its dragon.",
-  "goal": "Kill the ender dragon, then say 'dragon dead'.\nYou are standing in a lit stone room in the overworld. The three-by-three pool beside you is a live end portal - walk into it and you are in the End; walk into the exit portal after the dragon dies and you come back.\nDeath works differently here: keepInventory is OFF. If you die you drop everything where you fell and wake up in this room with nothing, and your gear is lying wherever it happened - in the End, on the island, possibly over the void. Going back for it is your problem and it may not be worth it.\nYou have a bed. Beds explode in the End and the Nether, so this room is the only place a bed is any use, and your spawn is already set here - a bed is worth it only if you want to move that. All ten end crystals on the obsidian pillars heal the dragon, so they come first; some sit inside iron bar cages, which cannot be broken without a pickaxe.\nDeaths are being measured alongside the kill. One hard rule, because it is unrecoverable: never dig down in the End - below the island is the void.",
+  "goal": "Kill the ender dragon, then say 'dragon dead'.\nYou are standing in a lit stone room in the overworld. The three-by-three pool beside you is a live end portal - walk into it and you are in the End; walk into the exit portal after the dragon dies and you come back.\nDeath works differently here: keepInventory is OFF. If you die you drop everything where you fell and wake up in this room with nothing, and your gear is lying wherever it happened - in the End, on the island, possibly over the void. Going back for it is your problem and it may not be worth it.\nThere are chests beside the portal holding two spare kits. That is all the gear that exists: when they are empty, dying again means rebuilding from nothing, and there is not time for that.\nYou have a bed. Beds explode in the End and the Nether, so this room is the only place a bed is any use, and your spawn is already set here - a bed is worth it only if you want to move that. All ten end crystals on the obsidian pillars heal the dragon, so they come first; some sit inside iron bar cages, which cannot be broken without a pickaxe.\nDeaths are being measured alongside the kill. One hard rule, because it is unrecoverable: never dig down in the End - below the island is the void.",
   "timeout_s": 7200,
   "setup": {
     "clear_inventory": true,
     "keep_inventory": false,
     "portal_room": {
-      "center": [200, 70, 200]
+      "center": [
+        200,
+        70,
+        200
+      ],
+      "spares": 2
     },
     "give": [
       "bow",

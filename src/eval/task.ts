@@ -94,6 +94,19 @@ export const TaskSchema = z.object({
      */
     portal_room: z.object({
       center: z.tuple([z.number(), z.number(), z.number()]).default([200, 70, 200]),
+      /**
+       * Stock a chest by the portal with `spares` more copies of the `give` kit.
+       *
+       * Without this, one early death ends the rung rather than setting it back. Tester lost its
+       * diamond kit to an enderman four minutes in, the drops despawned while it walked to the wrong
+       * dimension, and it spent the rest of the run trying to rebuild from two jungle logs on normal
+       * difficulty - which is not a dragon fight, and not a measurement of anything the rung is for.
+       *
+       * A real player who dies to the dragon goes back to a base with spare gear. This is that base.
+       * Death still costs a trip and a kit, so "minimal deaths" keeps its teeth; it just stops one
+       * bad minute from deciding the whole run.
+       */
+      spares: z.number().int().min(0).default(2),
     }).optional(),
     /** Summon mobs next to the bot after everything else: "enderman 3". */
     summon: z.array(z.string()).default([]),

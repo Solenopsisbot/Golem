@@ -102,6 +102,28 @@ export class EvalRunner {
       await run(`execute in minecraft:overworld run tp ${bot} ${px + 4}.5 ${py} ${pz + 0}.5`);
       // The way home. Dying in the End with keepInventory off should cost the gear, not the run.
       await run(`execute in minecraft:overworld run spawnpoint ${bot} ${px + 4} ${py} ${pz}`);
+      // Spare kits in a chest, because otherwise the first death ends the rung instead of setting it
+      // back: the drops despawn in five minutes, and a bot with nothing cannot rebuild to diamond and
+      // fight a dragon inside the clock. A player who dies has a base to go back to; this is it.
+      if (s.portal_room.spares > 0 && s.give.length) {
+        // One chest per 27 stacks, placed in a row. Silently dropping the overflow would mean the
+        // last spare kit is quietly short an item, which is the kind of thing that gets blamed on
+        // the agent later.
+        const entries: string[] = [];
+        for (let copy = 0; copy < s.portal_room.spares; copy++) entries.push(...s.give);
+        const chests = Math.max(1, Math.ceil(entries.length / 27));
+        for (let c = 0; c < chests; c++) {
+          const cx = px + 4, cy = py, cz = pz + 2 + c;
+          await run(`execute in minecraft:overworld run setblock ${cx} ${cy} ${cz} minecraft:chest`);
+          for (let i = 0; i < 27; i++) {
+            const entry = entries[c * 27 + i];
+            if (!entry) break;
+            const [item, count] = entry.split(/\s+/);
+            await run(`execute in minecraft:overworld run item replace block ${cx} ${cy} ${cz} container.${i} with minecraft:${item} ${count ?? 1}`);
+          }
+        }
+        log.info(`stocked ${chests} supply chest(s) at ${px + 4},${py},${pz + 2} with ${s.portal_room.spares} spare kit(s)`);
+      }
       log.info(`built a portal room at ${px},${py},${pz} with a live end portal`);
     }
     const dim = s.dimension ? `minecraft:${s.dimension}` : undefined;
