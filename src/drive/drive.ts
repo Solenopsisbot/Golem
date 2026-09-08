@@ -199,6 +199,12 @@ export class Drive {
     if (extras.inv) lines.push(`[inv] ${extras.inv.replace(/^inv: /, "")}`);
     if (extras.near) lines.push(`[near] ${extras.near}`);
     if (this.lastTurnToolCalls >= 0) lines.push(`[last turn] ${this.lastTurnToolCalls} tool call${this.lastTurnToolCalls === 1 ? "" : "s"}${this.lastTurnToolCalls > 4 ? " (batch more into one shem_eval)" : ""}`);
+    // What the reflexes have actually been doing. A reflex cancels the running script when it acts,
+    // so from up here it looks purely like interference and the rational response is `reflex_set off`
+    // - which is what agents do, and then they die to the thing it was catching. The work it did is
+    // invisible unless we say it, so say it.
+    const fired = this.rt.reflexes.fired().filter((f) => f.n > 0).slice(0, 4);
+    if (fired.length) lines.push(`[reflexes] ${fired.map((f) => `${f.name} acted ${f.n}x`).join(", ")}`);
     return lines.join("\n");
   }
 

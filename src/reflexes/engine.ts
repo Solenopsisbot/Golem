@@ -66,6 +66,12 @@ export class ReflexEngine {
   }
   get active(): string | null { return this.acting?.name ?? null; }
 
+  /** How many times each reflex has acted this session, most-fired first. */
+  private readonly fireCounts = new Map<string, number>();
+  fired(): { name: string; n: number }[] {
+    return [...this.fireCounts.entries()].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n);
+  }
+
   start(): void {
     this.stop();
     this.timer = setInterval(() => { void this.tick(); }, this.opts.intervalMs ?? 250);
@@ -112,6 +118,7 @@ export class ReflexEngine {
       void (async () => {
         try {
           const note = await r.act(p, trigger);
+          this.fireCounts.set(r.name, (this.fireCounts.get(r.name) ?? 0) + 1);
           const text = note ?? `${r.name} fired`;
           if (note || r.interrupts) this.log.info(`reflex ${r.name}: ${text}`); else this.log.debug(`reflex ${r.name}: ${text}`);
           this.ctx.trace.mark("reflex", { name: r.name, phase: "end", note: text });
