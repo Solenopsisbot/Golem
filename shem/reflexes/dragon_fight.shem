@@ -31,9 +31,21 @@ reflex dragon_fight priority 93 on tick when dimension == "the_end" and nearest(
       back_off(cloud, 12)
     } else if (crystal != none) {
       // Crystals first, always. Every one still standing heals the dragon faster than a bow can hurt
-      // it, so shooting the dragon while any remain is throwing arrows away. They do not move, which
-      // makes them the easiest thing on the island to hit.
-      if (crystal.dist < 6) {
+      // it, so shooting the dragon while any remain is throwing arrows away.
+      //
+      // Walk to the FOOT of the pillar before firing. Shooting one from where you happen to be
+      // standing does not work and it is not a matter of aim: the crystal sits 20 to 45 blocks up on
+      // a one-block apex, so from forty blocks out the arrow arrives at a shallow angle and clips the
+      // pillar, and past `shoot_at`'s 64-block limit the body refuses the shot outright without ever
+      // firing. Tester spent 56 arrows this way for nothing across two runs before working out - on
+      // its own, in a script comment - that the answer is to stand underneath and fire almost
+      // straight up, where the pillar cannot be in the way and the range is just the height.
+      if (crystal.dist > 10) {
+        try { timeout 8s { goto_xz(int(crystal.pos.x), int(crystal.pos.z), reach: 4) } }
+        catch (e) { log "to pillar: ${e.kind}" }
+      } else if (crystal.dist < 6) {
+        // Close enough to swing: this is also how a caged crystal comes down, since iron bars stop
+        // arrows entirely and several pillars on a fresh island are caged.
         try { melee_while(crystal, max_ms: 2000) } catch (e) { log "crystal melee: ${e.kind}" }
       } else {
         try { shoot_at(crystal, shots: 3) } catch (e) { log "crystal: ${e.kind}" }
