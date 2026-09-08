@@ -474,8 +474,21 @@ export class EvalRunner {
       // "I'm holding here in the portal room, geared with nothing, waiting on your call" - a sensible
       // thing to say to an operator, and there was no operator.
       const owner = loaded.config.players.owners[0] ?? "eval";
+      // Tell it where the furniture is. The harness built the portal room and knows the exact
+      // coordinates of everything in it; the agent does not, and "the pool beside you" stops being
+      // useful the moment it walks out of the room. Tester decided the portal and the chests were at
+      // (-8, 67, -3) - where the body happened to log in - and set off on a three hundred block walk
+      // to nothing with an empty inventory.
+      let furniture = "";
+      if (task.setup.portal_room) {
+        const [px, py, pz] = task.setup.portal_room.center;
+        const chests = task.setup.portal_room.spares > 0 && task.setup.give.length
+          ? ` The supply chests are at (${px + 4}, ${py}, ${pz + 2}) and the next few blocks north of it.`
+          : "";
+        furniture = `\n\nOverworld coordinates you will need: the end portal is the 3x3 pool centred on (${px}, ${py}, ${pz}). Your respawn is (${px + 4}, ${py}, ${pz}), in the same room.${chests}`;
+      }
       const unattended = "\n\nThis is an unattended run. Nobody is watching and nothing you ask will be answered, so make every call yourself and keep going until the goal is met or the time is up.";
-      session.drive.push({ kind: "goal", priority: 80, from: owner, text: `${owner} set your goal: ${task.goal}${unattended}` });
+      session.drive.push({ kind: "goal", priority: 80, from: owner, text: `${owner} set your goal: ${task.goal}${furniture}${unattended}` });
       const deadline = t0 + task.timeout_s * 1000;
       while (Date.now() < deadline && !this.aborted) {
         await new Promise((r) => setTimeout(r, 5000));
