@@ -24,11 +24,14 @@ script standoff_for(c): pos {
 
 /// Is this crystal inside an iron bar cage?
 ///
-/// Bars stop arrows dead, and there is no pickaxe in a starting End kit unless you brought one, so a
-/// caged crystal is often simply not available. Two things worth knowing before you write one off:
-/// the cages have no roof, so a steep enough shot drops in from above; and a crystal only heals the
-/// dragon within 32 blocks of it, so a cage out on the ring does nothing while the dragon is perched
-/// on the fountain.
+/// Bars stop arrows completely. Cages are not all the same shape: some are open on top, where a
+/// steep enough shot drops in from above, and some are fully enclosed with a roof, where nothing
+/// gets in and the bars have to come off with a pickaxe. Check which you are looking at before
+/// spending a quiver on it - reading one cage and assuming the rest match is how you conclude a
+/// reachable crystal is impossible, or waste arrows on one that really is.
+///
+/// A crystal also only heals the dragon within 32 blocks of it, so a cage out on the ring does
+/// nothing at all while the dragon is perched on the fountain.
 ///
 /// Only sees bars near YOU - find_blocks searches from the bot - so check it from somewhere close.
 script caged(c, radius: float = 64): bool {
