@@ -194,7 +194,10 @@ export class Drive {
     if (died) {
       const now = m.dimension.replace("minecraft:", "");
       if (now === died.dim) this.diedInOtherDimension = null;
-      else if (m.inWorld) lines.push(`[warning] you died at ${died.where} in the ${died.dim.replace(/_/g, " ")} and you are now in the ${now.replace(/_/g, " ")}. Coordinates from before that death point at nothing here; travel there first.`);
+      else if (m.inWorld) {
+        const named = (d: string) => (d.startsWith("the_") ? d.replace(/_/g, " ") : `the ${d}`);
+        lines.push(`[warning] you died at ${died.where} in ${named(died.dim)} and you are now in ${named(now)}. Coordinates from before that death point at nothing here; travel there first.`);
+      }
     }
     if (extras.inv) lines.push(`[inv] ${extras.inv.replace(/^inv: /, "")}`);
     if (extras.near) lines.push(`[near] ${extras.near}`);
@@ -245,7 +248,9 @@ export class Drive {
       // the warning never appeared - a fix that silently did nothing, which is this project's whole
       // recurring theme.
       const dim = m.dimension.replace("minecraft:", "");
-      const where = `${fmtPos(m.blockPos)}${dim ? ` in the ${dim.replace(/_/g, " ")}` : ""}`;
+      // "the_end" already carries its article; "in the the end" is not a sentence.
+      const named = (d: string) => (d.startsWith("the_") ? d.replace(/_/g, " ") : `the ${d}`);
+      const where = `${fmtPos(m.blockPos)}${dim ? ` in ${named(dim)}` : ""}`;
       this.journal.note(`died at ${where}`);
       // Remember it if the respawn is going to land somewhere else, so the state header can keep
       // saying so. Naming the dimension in the death message once is not enough: the mistake happens
