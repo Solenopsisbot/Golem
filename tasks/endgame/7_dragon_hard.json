@@ -1,0 +1,50 @@
+{
+  "name": "dragon_hard",
+  "description": "Kill the ender dragon with no keepInventory: dying drops everything where you fell, and the way back is a portal room in the overworld. Needs a world whose End still has its dragon.",
+  "goal": "Kill the ender dragon, then say 'dragon dead'.\nYou are standing in a lit stone room in the overworld. The three-by-three pool beside you is a live end portal - walk into it and you are in the End; walk into the exit portal after the dragon dies and you come back.\nDeath works differently here: keepInventory is OFF. If you die you drop everything where you fell and wake up in this room with nothing, and your gear is lying wherever it happened - in the End, on the island, possibly over the void. Going back for it is your problem and it may not be worth it.\nYou have a bed. Beds explode in the End and the Nether, so this room is the only place a bed is any use, and your spawn is already set here - a bed is worth it only if you want to move that. All ten end crystals on the obsidian pillars heal the dragon, so they come first; some sit inside iron bar cages, which cannot be broken without a pickaxe.\nDeaths are being measured alongside the kill. One hard rule, because it is unrecoverable: never dig down in the End - below the island is the void.",
+  "timeout_s": 7200,
+  "setup": {
+    "clear_inventory": true,
+    "keep_inventory": false,
+    "portal_room": {
+      "center": [200, 70, 200]
+    },
+    "give": [
+      "bow",
+      "arrow 320",
+      "diamond_sword",
+      "diamond_pickaxe",
+      "diamond_helmet",
+      "diamond_chestplate",
+      "diamond_leggings",
+      "diamond_boots",
+      "carved_pumpkin",
+      "white_bed",
+      "cooked_beef 32",
+      "cobblestone 192",
+      "ender_pearl 8",
+      "golden_apple 4"
+    ],
+    "commands": [
+      "execute in minecraft:the_end run forceload add -32 -32 32 32"
+    ]
+  },
+  "success": [
+    {
+      "type": "said",
+      "includes": "dragon dead"
+    },
+    {
+      "type": "rcon",
+      "command": "execute if entity @e[type=minecraft:ender_dragon]",
+      "expect": "Test failed"
+    }
+  ],
+  "tags": [
+    "endgame",
+    "combat",
+    "boss",
+    "hard"
+  ],
+  "fresh_workspace": true
+}

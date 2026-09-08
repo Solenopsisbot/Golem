@@ -39,6 +39,17 @@ export const TaskSchema = z.object({
     /** Server commands via RCON, run in order before the task. `{bot}` is replaced with the bot's username. */
     commands: z.array(z.string()).default([]),
     clear_inventory: z.boolean().default(true),
+    /**
+     * Keep the bot's gear through death. On by default, because a combat rung that strips the bot on
+     * every death makes each retry strictly worse than the last and measures despair rather than
+     * skill.
+     *
+     * Turn it OFF to make dying actually cost something: the bot drops everything where it fell and
+     * has to go and get it back, which is the real game and which makes "minimal deaths" mean what
+     * it sounds like. Expect a rung to need a way home before this is fair - a bed sets the
+     * overworld spawn, and beds explode in the Nether and the End.
+     */
+    keep_inventory: z.boolean().default(true),
     teleport: Pos.optional(),
     /** `spreadplayers x z 1 range`: put the bot on safe surface ground within `range` of (x, z). */
     spread: z.tuple([z.number(), z.number(), z.number()]).optional(),
@@ -67,6 +78,22 @@ export const TaskSchema = z.object({
       center: z.tuple([z.number(), z.number(), z.number()]),
       half: z.number().default(6),     // interior half-width in blocks
       height: z.number().default(5),   // interior height in blocks
+    }).optional(),
+    /**
+     * Build a lit stone room in the overworld with a working 3x3 end portal, and stand the bot in it.
+     *
+     * This is the way home for a rung that turns `keep_inventory` off. Dying then drops the bot's
+     * gear where it fell, which is the point - but a death also has to be survivable as a setback
+     * rather than as the end of the run, and the End has no respawn of its own. So the overworld
+     * spawn is set here, three blocks from a portal the bot can walk back through.
+     *
+     * The portal is built rather than found. A stronghold's own portal needs twelve eyes and sits at
+     * coordinates that differ per world; none of that is what the rung is measuring, and `end_portal`
+     * blocks placed directly work exactly like the real thing (verified - a pig stood in one and
+     * arrived in the End on the next tick).
+     */
+    portal_room: z.object({
+      center: z.tuple([z.number(), z.number(), z.number()]).default([200, 70, 200]),
     }).optional(),
     /** Summon mobs next to the bot after everything else: "enderman 3". */
     summon: z.array(z.string()).default([]),

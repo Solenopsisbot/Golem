@@ -49,10 +49,11 @@ export class EvalRunner {
     this.endRespawnAltTries = 0;
     const run = async (c: string) => { const out = await r.command(c.replace(/\{bot\}/g, bot)); log.debug(`rcon ${c} -> ${out.slice(0, 80)}`); };
     const s = task.setup;
-    // Keep gear through death: a combat rung that respawns the bot into the fight must not strip it
-    // to an empty inventory each death, or every retry is worse than the last. Also stop mobs from
-    // burning up the moment they are summoned onto lit ground far from natural spawns.
-    await run(`gamerule keepInventory true`);
+    // Keep gear through death unless the task says otherwise: a combat rung that respawns the bot
+    // into the fight must not strip it to an empty inventory each death, or every retry is worse
+    // than the last. A rung that switches this off is asking the bot to earn its gear back, which
+    // needs a way home first.
+    await run(`gamerule keepInventory ${s.keep_inventory}`);
     // A safe fallback respawn: a lit sky platform at (0, 200, 0). Without this, a death in a hostile
     // dimension dumps the bot at the overworld world-spawn, which on the shared dev world is a
     // night killing-floor, and it death-loops there instead of failing the rung cleanly. The
@@ -84,8 +85,27 @@ export class EvalRunner {
       await run(`execute in ${adim} run spawnpoint ${bot} ${cx} ${cy} ${cz}`);
       log.info(`built a ${2 * h + 1}×${ht}×${2 * h + 1} arena at ${cx},${cy},${cz} in ${s.arena.dimension}`);
     }
+    if (s.portal_room) {
+      const [px, py, pz] = s.portal_room.center;
+      const h = 5, ht = 6;
+      // Same shape as the arena: forceload first, because `fill` silently does nothing in an
+      // unloaded chunk and this is far from anywhere a player has been.
+      await run(`execute in minecraft:overworld run forceload add ${px - h - 2} ${pz - h - 2} ${px + h + 2} ${pz + h + 2}`);
+      await run(`execute in minecraft:overworld run fill ${px - h - 1} ${py - 2} ${pz - h - 1} ${px + h + 1} ${py + ht + 1} ${pz + h + 1} minecraft:stone`);
+      await run(`execute in minecraft:overworld run fill ${px - h} ${py} ${pz - h} ${px + h} ${py + ht} ${pz + h} minecraft:air`);
+      await run(`execute in minecraft:overworld run fill ${px - h} ${py - 1} ${pz - h} ${px + h} ${py - 1} ${pz + h} minecraft:stone`);
+      // Glowstone ceiling: light 15 everywhere, so nothing spawns in the room the bot respawns into.
+      await run(`execute in minecraft:overworld run fill ${px - h} ${py + ht} ${pz - h} ${px + h} ${py + ht} ${pz + h} minecraft:glowstone`);
+      await run(`execute in minecraft:overworld run fill ${px - 1} ${py} ${pz - 1} ${px + 1} ${py} ${pz + 1} minecraft:end_portal`);
+      // Stand it clear of the portal, not in it - an end_portal block teleports on contact, and a bot
+      // placed inside one leaves for the End before setup has finished dressing it.
+      await run(`execute in minecraft:overworld run tp ${bot} ${px + 4}.5 ${py} ${pz + 0}.5`);
+      // The way home. Dying in the End with keepInventory off should cost the gear, not the run.
+      await run(`execute in minecraft:overworld run spawnpoint ${bot} ${px + 4} ${py} ${pz}`);
+      log.info(`built a portal room at ${px},${py},${pz} with a live end portal`);
+    }
     const dim = s.dimension ? `minecraft:${s.dimension}` : undefined;
-    if (s.arena) { /* arena placed the bot; skip structure/dimension placement */ }
+    if (s.arena || s.portal_room) { /* arena / portal room placed the bot; skip structure and dimension placement */ }
     else if (s.locate) {
       // "The nearest minecraft:fortress is at [X, ~, Z] (N blocks away)"; the source position matters, so give it one.
       const out = await r.command(`execute ${dim ? `in ${dim} ` : ""}positioned 0 64 0 run locate structure minecraft:${s.locate.structure}`);
