@@ -261,6 +261,23 @@ export class EvalRunner {
         }
       }
       await r.command(`execute in minecraft:the_end run spawnpoint ${bot} ${spot.x} ${spot.y} ${spot.z}`);
+      // And if it is out of the End entirely, put it back.
+      //
+      // A forced End spawnpoint is honoured unreliably, and when it is not, the bot lands at the
+      // overworld world spawn. It cannot walk back: this rung teleports the bot straight into the
+      // End, so no activated end portal exists anywhere in the world. A player who dies to the
+      // dragon returns through the portal they built; this bot has nothing to return through, so an
+      // ejection is permanent and the rung is over with an hour still on the clock.
+      //
+      // Run 31 spent twenty-six minutes walking 1400 blocks to a stronghold to dig for a portal room
+      // that was never lit, died on the way down, and respawned further away than it started. That
+      // is not the dragon fight being measured. Deaths are still counted, so the cost of dying is
+      // kept - only the exile is undone.
+      const dimOut = await r.command(`data get entity ${bot} Dimension`);
+      if (!dimOut.includes("the_end")) {
+        await r.command(`execute in minecraft:the_end run tp ${bot} ${spot.x} ${spot.y + 1} ${spot.z}`);
+        log.info(`${bot} was out of the End (${dimOut.trim().slice(-40)}); returned to ${spot.x},${spot.y},${spot.z}`);
+      }
     } catch { /* a probe must never take the run down with it */ }
   }
 
