@@ -144,8 +144,13 @@ export class EvalRunner {
         // the whole scan then quietly finds nowhere to stand.
         const air = async (ax: number, ay: number, az: number) =>
           (await r.command(`execute in minecraft:the_end if block ${ax} ${ay} ${az} minecraft:air`)).includes("Test passed");
+        // Scan DOWNWARD from above the island, so the first hit is the surface.
+        //
+        // Scanning up from below finds the first ledge instead, and in the End that is the underside
+        // of the island: run 40 drew (50, 45, 0), a shelf with solid rock at 43 and open air for
+        // twenty blocks above it, hanging over the void. The bot respawned onto it and walked off.
         const standable = async (ax: number, az: number): Promise<number | null> => {
-          for (let probe = 40; probe <= 110; probe++) {
+          for (let probe = 110; probe >= 40; probe--) {
             if (await air(ax, probe, az) && await air(ax, probe + 1, az) && !(await air(ax, probe - 1, az))) return probe;
           }
           return null;
