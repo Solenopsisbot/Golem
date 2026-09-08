@@ -56,6 +56,21 @@ reflex dragon_fight priority 93 on tick when dimension == "the_end" and nearest(
       } else {
         try { shoot_at(crystal, shots: 3) } catch (e) { log "crystal: ${e.kind}" }
       }
+    } else if (d != none and inventory.count("arrow") < 24) {
+      // Nearly dry, and no crystal in sight. Arrows are the only ranged answer here, so go and pick
+      // the spent ones up rather than keep firing the last of them.
+      try { collect_drops(20) } catch (e) { log "collect: ${e.kind}" }
+    } else if (d != none and max(abs(here.x), abs(here.z)) < 30) {
+      // No crystal visible - but that is not the same as no crystal standing. The client's entity
+      // list empties after every death and refills as chunks come back, so `nearest(end_crystal) ==
+      // none` is usually just blindness, and answering it by shooting the dragon burns the quiver on
+      // the one target that heals faster than a bow can hurt it.
+      //
+      // So walk out to the pillar ring and look again. Gated on actually being near the middle,
+      // which makes it self-limiting: once out at the ring, either a crystal is visible and the
+      // branch above takes it, or there genuinely are none left and the perch-melee branch does the
+      // killing - which is how the dragon dies in vanilla anyway.
+      try { timeout 10s { goto_xz(38, 0, reach: 6) } } catch (e) { log "reacquire: ${e.kind}" }
     } else if (d != none) {
       // How far the dragon is from the fountain, horizontally. It perches on the fountain at
       // (0, 63, 0) and nowhere else, so this - not its distance from me - is what says "perched".
@@ -73,10 +88,16 @@ reflex dragon_fight priority 93 on tick when dimension == "the_end" and nearest(
         // ignores damage, which is why hitting "the dragon" from a script can register nothing.
         try { melee_while(d, max_ms: 5000, stop_below_health: 11) }
         catch (e) { if (e.kind == "unsupported") { try { attack(d, timeout: 6s) } catch (e2) { log "melee: ${e2.kind}" } } else { log "melee: ${e.kind}" } }
-      } else if (inventory.count("arrow") > 0) {
-        // Out of reach: lead it. Aiming where it already is puts arrows in the floor.
-        // One call, six arrows: the body runs the aiming loop, so there is nothing to interleave.
-        try { lead_shot("ender_dragon", 140, 6) } catch (e) { log "shot: ${e.kind}" }
+      } else if (inventory.count("arrow") > 0 and d.dist < 45) {
+        // Out of reach but close: lead it. Aiming where it already is puts arrows in the floor.
+        // One call, four arrows: the body runs the aiming loop, so there is nothing to interleave.
+        //
+        // 45 blocks, not 140. A dragon at a hundred blocks is a hundred blocks of arc over an island
+        // that runs out: every one of those arrows was found lying at y -29, y -52, a hundred and
+        // eighty blocks from anything, falling through the void. And the shot is pointless even when
+        // it lands - a standing crystal heals the dragon faster than a bow hurts it, so the only
+        // reason to be firing at the dragon at all is that no crystal is left.
+        try { lead_shot("ender_dragon", 45, 4) } catch (e) { log "shot: ${e.kind}" }
         // Spent arrows are lying around and the quiver is finite; sweep them up while it is far off.
         if (inventory.count("arrow") < 60) {
           try { collect_drops(14) } catch (e) { log "collect: ${e.kind}" }
