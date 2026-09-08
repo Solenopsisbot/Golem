@@ -46,8 +46,25 @@ reflex dragon_fight priority 93 on tick when dimension == "the_end" and nearest(
       // a shot. This is the same mistake in the same place twice: it is what made Tester read
       // reachable crystals as "caged" in r4, and I then wrote it into this reflex while fixing that.
       let chor = max(abs(crystal.pos.x - here.x), abs(crystal.pos.z - here.z))
-      if (chor > 6) {
-        try { timeout 8s { goto_xz(int(crystal.pos.x), int(crystal.pos.z), reach: 4) } }
+      // Stand BACK by about the crystal's height, never underneath it.
+      //
+      // Firing from the pillar's foot cannot work, and not because of aim: the column is in the way.
+      // From four blocks out, the line to a crystal seventeen up passes through the obsidian at about
+      // y 10, and no arc saves it - at eighty degrees a bow arrow is only twelve blocks high after two
+      // blocks of travel, still inside the pillar. Run 35 put its whole quiver into the rock at y 74
+      // under a crystal at y 80, tightly grouped, six blocks short.
+      //
+      // The sight line clears the edge when d > (h - 1.6) * r / 2, and End pillars run about two
+      // blocks in radius, so the standoff is roughly the height itself: eighteen blocks out for a
+      // crystal seventeen up, forty-two for one forty-one up. Both sit inside shoot_at's 64.
+      let dy = max(1.0, crystal.pos.y - here.y)
+      let so = min(52.0, max(14.0, 1.2 * dy))
+      let cdx = here.x - crystal.pos.x
+      let cdz = here.z - crystal.pos.z
+      let clen = max(1.0, max(abs(cdx), abs(cdz)))
+      if (chor < so - 8 or chor > so + 12) {
+        // Walk out along the line we are already on, to the ring where the shot clears the pillar.
+        try { timeout 8s { goto_xz(int(crystal.pos.x + cdx / clen * so), int(crystal.pos.z + cdz / clen * so), reach: 4) } }
         catch (e) { log "to pillar: ${e.kind}" }
       } else if (crystal.dist < 6) {
         // Close enough to swing: this is also how a caged crystal comes down, since iron bars stop
