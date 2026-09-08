@@ -1,66 +1,90 @@
 // The End: shoot the crystals, then the dragon.
 //
-// The generic fighting pieces (kit_up, eat_if_hurt, lead_shot, back_off) live in lib/combat; only the
-// crystals-then-boss shape is dragon-specific.
+// The generic fighting pieces (kit_up, eat_if_hurt, lead_shot, back_off) live in lib/combat, and the
+// End's own arithmetic - firing positions, cages, perch distance - lives in lib/end. This file is
+// just the crystals-then-boss shape, in one call.
 use "lib/combat"
+use "lib/end"
 
-/// One bow shot at an entity, aimed `lift` blocks above it for the arrow's drop.
-script aimed_shot(e: entity, lift: float = 0) {
-  equip("bow")
-  look_at(vec(e.pos.x, e.pos.y + lift, e.pos.z))
-  use_hold(25)
-  use_release()
-}
-
-/// Shoot every end crystal in sight from the ground below its pillar. The tallest pillars are out of
-/// bow range from the ground: pillar up with blocks for those. Returns how many crystals were destroyed.
-script shoot_crystals(max_per: int = 8): int {
+/// Shoot every reachable end crystal, nearest first. Returns how many went down.
+///
+/// Walks to the standoff `lib/end` computes and fires with `shoot_static`, which solves the shot by
+/// simulating the arrow. Both of those replace things that were wrong here for a long time: this
+/// script used to approach to a flat 16 blocks and aim with a fudge factor of roughly `0.08 * range`,
+/// which is right at about one distance and misses everywhere else, and from 16 blocks out the
+/// pillar is in the way regardless of aim. It reported "0 destroyed" after a full quiver and read as
+/// the crystals being caged.
+///
+/// Skips anything still standing after `max_per` shots rather than emptying the quiver into bars.
+script shoot_crystals(max_per: int = 4): int {
+  in_the_end()
   if (inventory.count("bow") < 1) fail "no bow"
   let killed = 0
-  let crystals = find_entities("end_crystal", radius: 160)
-  log "${len(crystals)} crystals in sight"
+  let crystals = find_entities("end_crystal", radius: 200)
+  log "${len(crystals)} crystals standing"
   for (c of crystals) {
-    try { timeout 2m { goto_xz(c.pos.x, c.pos.z, reach: 16) } } catch (e) { log "approach: ${e.kind} ${e.message}" }
-    let shots = 0
-    while (shots < max_per) {
-      let still = false
-      for (a of find_entities("end_crystal", radius: 80)) { if (a.id == c.id) still = true }
-      if (still == false) { killed = killed + 1; log "crystal ${c.id} destroyed"; break }
-      let d = max(abs(c.pos.x - here.x), abs(c.pos.z - here.z))
-      let up = c.pos.y - here.y
-      aimed_shot(c, lift: 0.5 + d * 0.08 + up * 0.05)
-      shots = shots + 1
-      wait 900ms
+    if (inventory.count("arrow") < 4) { log "out of arrows"; break }
+    let before = len(find_entities("end_crystal", radius: 200))
+    try { pop_crystal(c, shots: max_per) } catch (e) { log "crystal ${c.id}: ${e.kind} ${e.message}" }
+    if (len(find_entities("end_crystal", radius: 200)) < before) {
+      killed = killed + 1
+      log "crystal down at ${c.pos} (${killed} this pass)"
+    } else {
+      log "crystal at ${c.pos} survived ${max_per} shots - caged, or out of reach"
     }
   }
   return killed
 }
 
-/// Fight the dragon: melee when it perches on the fountain, arrows when it flies within range,
-/// otherwise wait by the fountain. Returns true when no dragon is left.
-script fight_dragon(): bool {
-  repeat (700) {
-    let d = nearest("ender_dragon", radius: 250)
-    if (d == none) { log "no dragon in sight"; return true }
-    if (food < 14) { try { eat_something() } catch (e) { log "eat: ${e.kind}" } }
-    let near = max(abs(d.pos.x - here.x), abs(d.pos.z - here.z))
-    if (d.pos.y < here.y + 6 && near < 10) {
-      try { attack(d, timeout: 8s) } catch (e) { log "melee: ${e.kind}" }
-    } else {
-      if (near < 70) {
-        // Lead it: a circling dragon is never where it was when you drew.
-        if (lead_shot() == false) aimed_shot(d, lift: 1 + near * 0.06)
+/// Fight the dragon. Returns true when it is dead.
+///
+/// The perch is the whole fight. A perched dragon holds still and takes full sword damage; a circling
+/// one mostly eats arrows. So this waits at the fountain and swings when it comes down, rather than
+/// chasing it.
+///
+/// Swings with `melee_while`, never `attack`. The dragon's parent entity ignores damage outright -
+/// only its parts take any - so `attack` on it registers nothing at all and looks like a miss. That
+/// is what this script used to do, which meant calling it did nothing but get you killed.
+script fight_dragon(rounds: int = 400): bool {
+  in_the_end()
+  repeat (rounds) {
+    let d = nearest("ender_dragon", 250)
+    if (d == none) { log "dragon gone"; return true }
+    if (health < 10) { try { back_off(d, 20) } catch (e) { log "retreat: ${e.kind}" } }
+    else {
+      eat_if_hurt(16)
+      let cloud = nearest("area_effect_cloud", 8)
+      if (cloud != none) {
+        // Breath outlasts the walk out of it; a pearl is instant and costs 5.
+        if (inventory.count("ender_pearl") > 0 and health >= 8) {
+          try { pearl_to(pos(int(here.x + (here.x - cloud.pos.x)), int(here.y), int(here.z + (here.z - cloud.pos.z)))) }
+          catch (e) { try { back_off(cloud, 14) } catch (e2) { log "cloud: ${e2.kind}" } }
+        } else { try { back_off(cloud, 14) } catch (e) { log "cloud: ${e.kind}" } }
+      } else if (dragon_offset() < 12 and d.pos.y < 71) {
+        // Perched. Walk to the fountain FLOOR, never to d.pos - a mid-air goal makes Baritone tower
+        // cobble toward it, and the fight ends as fall damage instead of as a dead dragon.
+        try { timeout 8s { goto(pos(0, 63, 0), reach: 5) } } catch (e) { log "close: ${e.kind}" }
+        try { melee_while(d, max_ms: 5000, stop_below_health: 10) } catch (e) { log "melee: ${e.kind}" }
+      } else if (inventory.count("arrow") > 0 and d.dist < 45) {
+        try { lead_shot("ender_dragon", 45, 3) } catch (e) { log "shot: ${e.kind}" }
       } else {
-        try { timeout 30s { goto_xz(0, 0, reach: 6) } } catch (e) { log "to the fountain: ${e.kind}" }
+        try { timeout 20s { goto_xz(0, 0, reach: 6) } } catch (e) { log "to the fountain: ${e.kind}" }
       }
     }
-    wait 1s
+    wait 500ms
   }
-  return nearest("ender_dragon", radius: 250) == none
+  return nearest("ender_dragon", 250) == none
 }
 
-/// Crystals first, then the dragon. Returns true when the dragon is dead.
+/// Crystals first, then the dragon, in one call. Returns true when the dragon is dead.
+///
+/// Crystals first is not a preference: each one still standing heals the dragon faster than a bow
+/// hurts it, so time spent on the dragon while any are up is time spent for nothing. Caged ones on
+/// the ring are the exception worth knowing - they only heal within 32 blocks, so a dragon perched on
+/// the fountain is out of their reach and they can simply be left.
 script beat_dragon(): bool {
-  shoot_crystals()
+  in_the_end()
+  let down = shoot_crystals()
+  log "cleared ${down} crystals; ${len(find_entities("end_crystal", radius: 200))} left"
   return fight_dragon()
 }
