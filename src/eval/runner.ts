@@ -138,8 +138,12 @@ export class EvalRunner {
         // 56 to 64, suffocated, died, respawned in the same rock, and lost seven lives in two
         // minutes without the dragon touching it. Deaths are the headline metric on this rung, so a
         // respawn point inside a wall poisons the whole measurement.
+        // `if block` on its own answers "Test passed"/"Test failed". Do NOT hang a `run data get
+        // entity <bot> ...` off it to produce the output: that reads as "not air" for every block in
+        // the world whenever the bot happens to be dead at the time, which on this rung is often, and
+        // the whole scan then quietly finds nowhere to stand.
         const air = async (ax: number, ay: number, az: number) =>
-          (await r.command(`execute in minecraft:the_end if block ${ax} ${ay} ${az} minecraft:air run data get entity ${bot} Health`)).includes("Health");
+          (await r.command(`execute in minecraft:the_end if block ${ax} ${ay} ${az} minecraft:air`)).includes("Test passed");
         const standable = async (ax: number, az: number): Promise<number | null> => {
           for (let probe = 40; probe <= 110; probe++) {
             if (await air(ax, probe, az) && await air(ax, probe + 1, az) && !(await air(ax, probe - 1, az))) return probe;
