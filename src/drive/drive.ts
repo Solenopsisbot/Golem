@@ -55,6 +55,8 @@ export class Drive {
   private emptyGoalTurns = 0;
   private lastTurnWasGoalTick = false;
   private readonly deathTimes: number[] = [];
+  /** Where the bot last died, when that death moved it to a different world. Cleared on return. */
+  private diedInOtherDimension: { dim: string; where: string } | null = null;
   private lastContextUsed = 0;
   compactions = 0;
   /** Tool calls in the previous turn, shown in the state header as a nudge toward batching. */
@@ -186,6 +188,14 @@ export class Drive {
       this.goal ? `goal: ${this.goal}` : "no goal",
     ].filter(Boolean);
     const lines = [`[state] ${parts.join(" | ")}`];
+    // Sticky until the bot is back in the world it died in. The three dimensions share a coordinate
+    // space, so numbers noted before a death are silently valid - and wrong - after it.
+    const died = this.diedInOtherDimension;
+    if (died) {
+      const now = m.dimension.replace("minecraft:", "");
+      if (now === died.dim) this.diedInOtherDimension = null;
+      else if (m.inWorld) lines.push(`[warning] you died at ${died.where} in the ${died.dim.replace(/_/g, " ")} and you are now in the ${now.replace(/_/g, " ")}. Coordinates from before that death point at nothing here; travel there first.`);
+    }
     if (extras.inv) lines.push(`[inv] ${extras.inv.replace(/^inv: /, "")}`);
     if (extras.near) lines.push(`[near] ${extras.near}`);
     if (this.lastTurnToolCalls >= 0) lines.push(`[last turn] ${this.lastTurnToolCalls} tool call${this.lastTurnToolCalls === 1 ? "" : "s"}${this.lastTurnToolCalls > 4 ? " (batch more into one shem_eval)" : ""}`);
@@ -227,6 +237,11 @@ export class Drive {
       const dim = (m.status?.player?.dimension ?? "").replace("minecraft:", "");
       const where = `${fmtPos(m.blockPos)}${dim ? ` in the ${dim.replace(/_/g, " ")}` : ""}`;
       this.journal.note(`died at ${where}`);
+      // Remember it if the respawn is going to land somewhere else, so the state header can keep
+      // saying so. Naming the dimension in the death message once is not enough: the mistake happens
+      // later, when the mind writes a NEW script from coordinates it still has in mind. Three runs
+      // have been lost to a plan full of End coordinates executing in the overworld.
+      if (dim) this.diedInOtherDimension = { dim, where: fmtPos(m.blockPos) };
       const now = Date.now();
       this.deathTimes.push(now);
       while (this.deathTimes.length && now - this.deathTimes[0]! > 120_000) this.deathTimes.shift();
