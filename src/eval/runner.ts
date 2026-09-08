@@ -109,8 +109,22 @@ export class EvalRunner {
         // One chest per 27 stacks, placed in a row. Silently dropping the overflow would mean the
         // last spare kit is quietly short an item, which is the kind of thing that gets blamed on
         // the agent later.
+        // Split anything over a stack. `item replace block ... with minecraft:arrow 320` is rejected
+        // outright - the command will not exceed the max stack size - and it fails SILENTLY, so the
+        // chest ends up quietly missing exactly the entries that matter most. The first version of
+        // this stocked 24 of 28 stacks and the four it dropped were the arrows and the cobblestone.
         const entries: string[] = [];
-        for (let copy = 0; copy < s.portal_room.spares; copy++) entries.push(...s.give);
+        for (let copy = 0; copy < s.portal_room.spares; copy++) {
+          for (const entry of s.give) {
+            const [item, countStr] = entry.split(/\s+/);
+            let left = Number(countStr ?? 1) || 1;
+            do {
+              const take = Math.min(left, 64);
+              entries.push(`${item} ${take}`);
+              left -= take;
+            } while (left > 0);
+          }
+        }
         const chests = Math.max(1, Math.ceil(entries.length / 27));
         for (let c = 0; c < chests; c++) {
           const cx = px + 4, cy = py, cz = pz + 2 + c;
