@@ -240,7 +240,11 @@ export class Drive {
       // died in the End, woke in the overworld, and walked two hundred blocks to those coordinates
       // THERE while its gear sat in the End and despawned. It was reasoning correctly from what we
       // told it; we just did not tell it which world.
-      const dim = (m.status?.player?.dimension ?? "").replace("minecraft:", "");
+      // `m.dimension`, not `m.status?.player?.dimension`: the mirror exposes it directly and that is
+      // what stateHeader reads. The status path is undefined here, so the guard below never armed and
+      // the warning never appeared - a fix that silently did nothing, which is this project's whole
+      // recurring theme.
+      const dim = m.dimension.replace("minecraft:", "");
       const where = `${fmtPos(m.blockPos)}${dim ? ` in the ${dim.replace(/_/g, " ")}` : ""}`;
       this.journal.note(`died at ${where}`);
       // Remember it if the respawn is going to land somewhere else, so the state header can keep
