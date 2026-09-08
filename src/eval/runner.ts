@@ -130,8 +130,6 @@ export class EvalRunner {
       const posOut = await r.command(`data get entity ${bot} Pos`);
       const at = posOut.match(/\[(-?[\d.]+)d, (-?[\d.]+)d, (-?[\d.]+)d\]/);
       if (at) {
-        const x = Math.round(Number(at[1])), z = Math.round(Number(at[3]));
-        let y = Math.round(Number(at[2]));
         // Find real standing room in that column before trusting the height.
         //
         // `spreadplayers` reports the bot's position immediately, which is usually mid-fall, so the
@@ -142,11 +140,33 @@ export class EvalRunner {
         // respawn point inside a wall poisons the whole measurement.
         const air = async (ax: number, ay: number, az: number) =>
           (await r.command(`execute in minecraft:the_end if block ${ax} ${ay} ${az} minecraft:air run data get entity ${bot} Health`)).includes("Health");
-        for (let probe = Math.max(y, 40); probe <= 120; probe++) {
-          if (await air(x, probe, z) && await air(x, probe + 1, z) && !(await air(x, probe - 1, z))) { y = probe; break; }
+        const standable = async (ax: number, az: number): Promise<number | null> => {
+          for (let probe = 40; probe <= 110; probe++) {
+            if (await air(ax, probe, az) && await air(ax, probe + 1, az) && !(await air(ax, probe - 1, az))) return probe;
+          }
+          return null;
+        };
+        // Out near the rim, never wherever spreadplayers happened to drop the bot. That lands
+        // anywhere inside sixty blocks of the middle, and the middle is the fountain the dragon
+        // perches on: run 38 drew (-7, 63, 6), seven blocks from the perch, and lost three lives in
+        // its first forty seconds. Mirroring the point across the island is no help when the point
+        // is already at the origin, which is the flaw in the previous attempt at this.
+        //
+        // Fifty blocks out is still on the island and still in the fight - the bot walks back in
+        // seconds - but it is not underneath the thing that killed it.
+        const R = 50;
+        for (const [dx, dz] of [[1, 0], [0, 1], [-1, 0], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]]) {
+          const cx = Math.round(dx * R), cz = Math.round(dz * R);
+          const cy = await standable(cx, cz);
+          if (cy !== null) { this.endRespawn = { x: cx, y: cy, z: cz }; break; }
         }
-        this.endRespawn = { x, y, z };
-        log.info(`end respawn at ${x},${y},${z}`);
+        if (!this.endRespawn) {
+          // Nothing on the rim: fall back to the drop point, but still find real footing in it.
+          const x = Math.round(Number(at[1])), z = Math.round(Number(at[3]));
+          const y = (await standable(x, z)) ?? Math.round(Number(at[2]));
+          this.endRespawn = { x, y, z };
+        }
+        log.info(`end respawn at ${this.endRespawn.x},${this.endRespawn.y},${this.endRespawn.z}`);
       }
     } else if (dim) {
       await run(`execute in ${dim} run tp ${bot} ~ 70 ~`);
