@@ -427,12 +427,20 @@ export class EvalRunner {
    * than deleted: what it wrote last time is evidence about the run, and deleting evidence to tidy a
    * fixture is a bad trade.
    */
-  private archiveScripts(agent: { workspaceDir: string; name: string }, t0: number): void {
+  /**
+   * Move the agent's own scripts out of the workspace before a rung, so it starts from the library.
+   *
+   * OUT of the workspace, not into a subdirectory of it. Archiving to `shem/_archive-<ts>/` left the
+   * files listable and runnable, and a run happily reached back into them: a codex run picked up
+   * `_archive-.../kit.shem` written by a Claude run two hours earlier and executed it. That is not a
+   * fresh workspace, and it quietly makes two runs share work while looking independent.
+   */
+  private archiveScripts(agent: { workspaceDir: string; name: string; dataDir: string }, t0: number): void {
     const dir = resolve(agent.workspaceDir, "shem");
     if (!existsSync(dir)) return;
     const scripts = readdirSync(dir).filter((f) => f.endsWith(".shem"));
     if (!scripts.length) return;
-    const into = resolve(dir, `_archive-${new Date(t0).toISOString().replace(/[:.]/g, "-")}`);
+    const into = resolve(agent.dataDir, "script-archive", new Date(t0).toISOString().replace(/[:.]/g, "-"));
     mkdirSync(into, { recursive: true });
     for (const f of scripts) renameSync(resolve(dir, f), resolve(into, f));
     log.info(`archived ${scripts.length} of ${agent.name}'s scripts to ${into}; the rung starts from the library`);
