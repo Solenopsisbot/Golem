@@ -63,6 +63,35 @@ script pop_crystal(c, shots: int = 3): bool {
   return len(find_entities("end_crystal", radius: 240)) < before
 }
 
+/// Break a crystal out of its cage with a pickaxe, then shoot it from a safe distance.
+///
+/// For the fully enclosed cages - bars on the sides AND a roof - where no shot reaches the crystal at
+/// any angle and it will heal the dragon forever if left. Needs a pickaxe; iron bars do not come off
+/// by hand.
+///
+/// Two things this does deliberately. It towers up on the pillar's OWN top rather than on placed
+/// cobble, because a crystal blast eats cobble and the twenty-block fall finishes what the explosion
+/// starts. And it walks away before firing, rather than hitting the crystal where it stands - point
+/// blank is what kills you, and it is the mistake worth not making twice.
+script break_cage(c, shots: int = 4): bool {
+  in_the_end()
+  if (inventory.count("diamond_pickaxe") < 1 and inventory.count("iron_pickaxe") < 1) fail "no pickaxe; bars will not break"
+  let top = int(c.pos.y)
+  // Up the pillar beside the crystal, not into its square.
+  try { timeout 90s { goto(pos(int(c.pos.x) + 2, top, int(c.pos.z)), reach: 2) } }
+  catch (e) { log "climb: ${e.kind} ${e.message}"; return false }
+  // Bars sit around the crystal at its own level and one above; take the side facing us and the roof.
+  for (o of [vec(1, 0, 0), vec(1, 1, 0), vec(0, 2, 0), vec(1, 2, 0), vec(0, 1, 0)]) {
+    let b = pos(int(c.pos.x) + o.x, top + o.y, int(c.pos.z) + o.z)
+    if (block_at(b).name == "iron_bars") { try { mine(b) } catch (e) { log "bars ${b}: ${e.kind}" } }
+  }
+  // Off the pillar before it goes up. The blast radius is six and you are standing inside it.
+  try { timeout 60s { goto_xz(int(c.pos.x) + 20, int(c.pos.z) + 20, reach: 4) } } catch (e) { log "retreat: ${e.kind}" }
+  let before = len(find_entities("end_crystal", radius: 200))
+  try { pop_crystal(c, shots: shots) } catch (e) { log "shoot: ${e.kind} ${e.message}" }
+  return len(find_entities("end_crystal", radius: 200)) < before
+}
+
 /// How far the dragon is from the fountain, horizontally. Under about 12 means it has perched.
 ///
 /// The perch is the fight: a perched dragon holds still and takes full sword damage, where arrows at
