@@ -196,7 +196,11 @@ export class Drive {
       if (now === died.dim) this.diedInOtherDimension = null;
       else if (m.inWorld) {
         const named = (d: string) => (d.startsWith("the_") ? d.replace(/_/g, " ") : `the ${d}`);
-        lines.push(`[warning] you died at ${died.where} in ${named(died.dim)} and you are now in ${named(now)}. Coordinates from before that death point at nothing here; travel there first.`);
+        // Say what to DO, and do not end on "travel there first" - that reads as "walk to those
+        // coordinates", which is the exact mistake, and the sentence has just handed them over. It
+        // sent a bot a hundred and sixty blocks across the overworld to its own End death site.
+        const back = this.rt.agent.name && died.dim === "the_end" ? " The way back to the end is the portal, not walking." : "";
+        lines.push(`[warning] your gear is at ${died.where}, which is in ${named(died.dim)}. You are in ${named(now)} now, where those numbers are a different place entirely - do not walk to them.${back}`);
       }
     }
     if (extras.inv) lines.push(`[inv] ${extras.inv.replace(/^inv: /, "")}`);
