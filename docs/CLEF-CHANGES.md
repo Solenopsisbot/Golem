@@ -230,6 +230,14 @@ arrows in the bag and never fired a shot.
    `{"clicked":0,"text":"Back to Game"}` and the screen is straight back on the next tick, which is
    the tell that this is the focus check re-opening it rather than a stuck screen.
 
+**Correction on the mechanism (2026-09-08).** I said the focus check re-opens the screen every tick.
+I did not prove that. The inference rested on "Back to Game" via `clickButton` failing to dismiss it -
+but if that click never invokes the button's action, an ordinary stuck screen looks identical. And my
+fix changed two things at once: the option AND a client restart, either of which would clear a screen
+opened once. Clef's own reading is that on this version the check sits in a path the headless mixin
+skips, so it is latent rather than firing. The screen was certainly open and certainly blocked all
+item use; what opened it is still unestablished.
+
 2. Headless mode should force `pauseOnLostFocus:false`, next to where the client already forces
    `onboardAccessibility=false` and mutes audio in `ClefClient`. A body with no window can never
    satisfy a focus check, so the option can only ever hurt it.
@@ -242,29 +250,29 @@ headless without Golem still hits it, and it stays silent when they do.
 fail loudly rather than return OK. A no-op that reports success is much more expensive to debug
 than an error.
 
-### 23. `shootAt` under-compensates arrow drop by about half (measured, 2026-09-08)
+### 23. WITHDRAWN - `shootAt`'s drop is correct; I measured my own aiming (2026-09-08)
 
-`shootAt`'s solver lands arrows roughly two blocks low at 25-50 blocks, consistently and in a tight
-group - it is a systematic bias, not scatter. Against an end crystal on a pillar this reads as
-"caged": every arrow buries itself in the obsidian just under the crystal it was aimed at.
+I filed this claiming `shootAt` under-compensates drop by about half. That was wrong, and the way it
+was wrong is worth keeping.
 
-Measured against a crystal 25 blocks out and 25 up, firing three full-charge arrows per setting and
-aiming at target + drop:
+My calibration script never called `shootAt`. It drove `look` + `useHold` + `useRelease` directly and
+applied my own drop rule, so the table I sent measured the rule of thumb, not the command. Clef's
+reply pinned the real numbers from the 26.2 jar - drag 0.99, gravity 0.05, move -> drag -> gravity -
+and showed its solver already applies a correction that only approaches 2x the drag-free `10*t^2` out
+past a hundred blocks, and is within 2% of it at thirty. Both things are true at once: "about 2x low"
+is a fair description of the naive rule at long range, and `shootAt` was never using the naive rule.
 
-| drop model | arrows landed | result |
-|---|---|---|
-| `10*t^2` (half gravity) | 8.6 blocks low | miss |
-| `15*t^2` | 1.2 blocks low | miss |
-| `20*t^2` | on target | **crystal destroyed** |
+What was actually wrong at the crystals was the aim POINT, not the ballistics. An entity's position
+is its feet; on an end crystal that is the bedrock it stands on, level with the pillar top, so aiming
+there grazes the rim. Golem's `shoot_static` aims a block above, and Tester found from stuck-arrow
+forensics that 30-40 blocks out wants two - the hitbox is two blocks tall, and clearing the rim means
+aiming at its top rather than its middle.
 
-`t = distance / 53`. The naive figure is what you get treating the arrow as drag-free: gravity is
-20 blocks/s^2, so `0.5*g*t^2` = `10*t^2`. A real arrow sheds about 1% of its speed per tick, so it
-is in the air appreciably longer, and drop goes as t^2 - hence roughly double.
+Open question worth one measurement rather than another argument: does `shootAt` aim at the entity's
+position or at its bounding-box centre? If the former, it will have the same rim problem on crystals
+with a perfectly good firing solution, and that is a much smaller fix than anything I asked for here.
 
-Golem now does its own aiming for stationary targets (`shoot_static` in `lib/combat`) rather than
-call `shootAt`, which is a workaround in the wrong repo. If `CombatController` is using `0.5*g*t^2`
-or a fixed fudge, applying drag to the flight-time estimate should fix it for everything - the same
-bias will be there for mobs at range, just harder to notice because they move.
+Lesson for filing these: measure the command, not a reimplementation of what you think it does.
 
 ### 24. `equip` reports `changed: true` without checking anything moved (found by the agent, 2026-09-08)
 
