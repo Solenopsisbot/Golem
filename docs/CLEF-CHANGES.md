@@ -266,6 +266,35 @@ call `shootAt`, which is a workaround in the wrong repo. If `CombatController` i
 or a fixed fudge, applying drag to the flight-time estimate should fix it for everything - the same
 bias will be there for mobs at range, just harder to notice because they move.
 
+### 24. `equip` reports `changed: true` without checking anything moved (found by the agent, 2026-09-08)
+
+Credit where due - Tester found this one itself and wrote it in a script comment: *"Free a hotbar
+slot: equip() silently no-ops when all nine are full."*
+
+The idempotence guard from #21 is in and works. Past it, the quick-move is fired and the result is
+built unconditionally:
+
+```java
+mc.gameMode.handleContainerInput(h.containerId, s.index, 0, ContainerInput.QUICK_MOVE, mc.player);
+o.addProperty("equipped", q);
+o.addProperty("changed", true);      // never verified
+```
+
+`QUICK_MOVE` does nothing when there is nowhere for the stack to go, and the caller is told it
+worked. The case that bites is the carved pumpkin: the head slot already holds a helmet, so the
+pumpkin has to land in the main inventory instead, and if that is full the click is a no-op. The bot
+then believes it is wearing a pumpkin, looks at an enderman, and finds out otherwise.
+
+Please re-read the slot after the click and report the truth:
+
+```
+equip {item}   ->  {equipped, changed: bool, slot?, reason?: "no space"}
+```
+
+Same shape as #22 (`closeScreen` hardcoding `closed: true`) and worth a sweep for the pattern
+generally: a command that performs an action and then asserts success without reading the world back
+is the most expensive kind of bug to find from the outside, because every log line looks healthy.
+
 ## What Baritone already covers (no Clef change needed)
 
 Verified against the bundled Baritone 1.15.0 jar: `axis blacklist build click come eta elytra explore explorefilter farm find follow forcecancel gc goal goto help invert litematica mine path pickup proc reloadall render repack saveall schematica sel set surface thisway tunnel version waypoints`.
