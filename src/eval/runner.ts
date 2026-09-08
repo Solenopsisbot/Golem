@@ -149,8 +149,11 @@ export class EvalRunner {
         // Scanning up from below finds the first ledge instead, and in the End that is the underside
         // of the island: run 40 drew (50, 45, 0), a shelf with solid rock at 43 and open air for
         // twenty blocks above it, hanging over the void. The bot respawned onto it and walked off.
+        // Stop at 55, not 40. The main island's surface sits around y 63; anything much below that
+        // out here is the underside of it, and standing on the underside means one step to the void.
+        // Run 41 drew (50, 45, 0) - solid at 43, then twenty blocks of open air - and death-looped.
         const standable = async (ax: number, az: number): Promise<number | null> => {
-          for (let probe = 110; probe >= 40; probe--) {
+          for (let probe = 110; probe >= 55; probe--) {
             if (await air(ax, probe, az) && await air(ax, probe + 1, az) && !(await air(ax, probe - 1, az))) return probe;
           }
           return null;
@@ -163,7 +166,9 @@ export class EvalRunner {
         //
         // Fifty blocks out is still on the island and still in the fight - the bot walks back in
         // seconds - but it is not underneath the thing that killed it.
-        const R = 50;
+        // 38, not 50: the island runs out somewhere past forty, and a ring at fifty lands on the rim
+        // where the only footing is an overhang. Far enough from the fountain, still solid ground.
+        const R = 38;
         for (const [dx, dz] of [[1, 0], [0, 1], [-1, 0], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]]) {
           const cx = Math.round(dx * R), cz = Math.round(dz * R);
           const cy = await standable(cx, cz);
