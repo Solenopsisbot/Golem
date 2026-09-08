@@ -18,13 +18,20 @@ owners = ["owner"]            # the eval runner sends goals as this player
 name = "Tester"
 persona = "personas/clay.md"
 
-# Eval-only model routing. The default fleet routes planning turns to Fable; when that model's
-# usage limit is exhausted every planning turn errors out and a long rung degrades into act-only
-# turns. Evals need to be reproducible more than they need the cheaper planner, so they plan on
-# opus too. The live fleet's routing (golem.toml) is unaffected.
+# Plan on Fable, act on Opus.
+#
+# The endgame rungs are turn-starved, not thinking-starved. The last two-hour dragon run managed 22
+# turns: one planning turn alone ran 562 seconds and produced three tool calls, and the bot stood
+# still for most of an hour while the clock ran out with four crystals up. Planning on opus at high
+# effort buys deliberation the fight does not reward - the decisions here are "which crystal next"
+# and "is it perched", not subtle ones - and spends the budget that should be going into acting.
+#
+# Fable is the cheaper, faster planner. If its usage limit is exhausted every planning turn errors
+# out and the rung degrades to act-only, so watch for that in the log rather than wondering why it
+# has gone quiet.
 [mind.models.plan]
-model = "opus"
-effort = "high"
+model = "fable"
+effort = "medium"
 
 # Stock reflexes only. dragon_fight exists and is documented in the library index, but switching it
 # on is the agent's decision to make (reflex_set), not the fixture's to make for it.
