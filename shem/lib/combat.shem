@@ -39,35 +39,6 @@ script eat_if_hurt(below: float = 12): bool {
   return false
 }
 
-/// Bow shot at something that does not move: an end crystal, a target block, a sleeping mob.
-///
-/// Aims here rather than handing off to `shoot_at`, because the body's solver under-compensates drop
-/// by about half at these ranges and lands every arrow in the pillar just below the crystal.
-script shoot_static(target, shots: int = 1): bool {
-  if (inventory.count("bow") < 1) return false
-  if (inventory.count("arrow") < 1) return false
-  equip("bow")
-  let at = target.pos
-  repeat (shots) {
-    let d = at.dist(here)
-    let t = d / 53.0
-    // 20, not 10. Half gravity gives 10t^2 for a drag-free arrow, but a real one sheds about a
-    // percent of its speed every tick, so it is in the air appreciably longer and falls about twice
-    // as far. Measured against a crystal 25 blocks out and 25 up: 10t^2 landed 8.6 blocks low,
-    // 15t^2 landed 1.2 low, 20t^2 destroyed it.
-    let drop = 20.0 * t * t
-    look_at(vec(at.x, at.y + drop, at.z))
-    use_hold(25)
-    // Re-aim after the draw: the head can drift during it, and the arrow leaves along wherever the
-    // rotation actually is on the release tick, not where it was when we started pulling.
-    look_at(vec(at.x, at.y + drop, at.z))
-    wait 120ms
-    use_release()
-    wait 500ms
-  }
-  return true
-}
-
 /// Shoot a moving target where it is going to BE, not where it is. Returns false if it is not in sight.
 ///
 /// Two things make this work and both are easy to get wrong. Draw FIRST and aim second: a full draw is

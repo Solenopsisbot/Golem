@@ -261,6 +261,104 @@ export async function interactEntity(ctx: Ctx, id: number, hand: "main" | "off" 
   try { await ctx.body.call("interactEntity", { entityId: id, hand }); } catch (err) { throw fromClef(err, `interact ${id}`); }
 }
 
+export interface AimSolution { yaw: number; pitch: number; ticks: number }
+
+/**
+ * Where to point a fully-drawn bow to hit a stationary point, by simulating the arrow.
+ *
+ * A Minecraft arrow is not a parabola. It leaves the bow at 3.0 blocks/tick at full charge and then,
+ * every tick, is scaled by 0.99 for drag BEFORE 0.05 is taken off its vertical speed for gravity. The
+ * drag is what breaks the textbook answer: `0.5*g*t^2` assumes constant horizontal speed, so it
+ * under-reads the flight time, and the error grows with range. Fitting a constant to it works at
+ * exactly the distance you measured and nowhere else - a factor of 2 calibrated at 35 blocks still
+ * missed a crystal at 41.
+ *
+ * So simulate instead, and binary-search the launch angle. `null` means the shot is out of range at
+ * any angle - worth knowing rather than firing anyway.
+ */
+export function solveAim(from: Vec, to: Vec): AimSolution | null {
+  const dx = to.x - from.x, dz = to.z - from.z;
+  const dy = to.y - from.y;
+  const flat = Math.hypot(dx, dz);
+  const yaw = -Math.atan2(dx, dz) * 180 / Math.PI;
+  if (flat < 0.01) return { yaw, pitch: dy > 0 ? -90 : 90, ticks: 0 };
+
+  // Height the arrow has when it crosses `flat`, launched at `elev` degrees above horizontal.
+  const heightAt = (elev: number): { y: number; ticks: number } => {
+    const r = elev * Math.PI / 180;
+    let vx = Math.cos(r) * 3.0, vy = Math.sin(r) * 3.0;
+    let x = 0, y = 0;
+    for (let t = 1; t <= 400; t++) {
+      const px = x, py = y;
+      x += vx; y += vy;
+      vx *= 0.99; vy *= 0.99; vy -= 0.05;
+      if (x >= flat) {
+        // Interpolate within the tick it crosses the target's distance.
+        const f = (flat - px) / (x - px);
+        return { y: py + (y - py) * f, ticks: t };
+      }
+      if (y < -256) break;
+    }
+    return { y: -Infinity, ticks: 400 };
+  };
+
+  // Scan rather than bisect. Height at the target's range does NOT rise monotonically with launch
+  // angle: it climbs to a peak and then collapses, because past a certain angle the arrow simply
+  // never travels far enough horizontally and there is no height to report at all. A bisection
+  // assumes monotonicity and quietly rejects reachable shots - it called the exact angle I had
+  // watched destroy a crystal "out of range".
+  let best: AimSolution | null = null;
+  let bestErr = Infinity;
+  for (let elev = -89; elev <= 89; elev += 0.5) {
+    const h = heightAt(elev);
+    if (!Number.isFinite(h.y)) continue;
+    const err = Math.abs(h.y - dy);
+    if (err < bestErr) { bestErr = err; best = { yaw, pitch: -elev, ticks: h.ticks }; }
+  }
+  if (!best || bestErr > 1.0) return null;
+  // Refine around the winner, since half a degree is about a block of miss at forty.
+  const coarse = -best.pitch;
+  for (let elev = coarse - 0.5; elev <= coarse + 0.5; elev += 0.02) {
+    const h = heightAt(elev);
+    if (!Number.isFinite(h.y)) continue;
+    const err = Math.abs(h.y - dy);
+    if (err < bestErr) { bestErr = err; best = { yaw, pitch: -elev, ticks: h.ticks }; }
+  }
+  return best;
+}
+
+/**
+ * Point-and-shoot at something that does not move, aiming by simulation rather than a fudge factor.
+ *
+ * Aims at `pos.y + 1`, not `pos.y`, because an entity's position is its FEET. On an end crystal that
+ * is the block it stands on, level with the top of the pillar, so aiming there sends the arrow into
+ * the pillar's lip a foot below the target - measured, arrows grouped at y 93.5 against a crystal
+ * whose base is y 95. One block up is the middle of the hitbox and it clears.
+ */
+export async function shootStatic(ctx: Ctx, target: Pos, shots = 1): Promise<{ fired: number; pitch: number | null }> {
+  const inv = await inventory(ctx);
+  if (!inv.has("bow")) throw new GolemError("missing_item", "no bow in inventory");
+  if (!inv.items.some((i) => /arrow$/.test(i.item))) throw new GolemError("missing_item", "no arrows in inventory");
+  await selectItem(ctx, "bow");
+  let fired = 0;
+  let pitch: number | null = null;
+  for (let i = 0; i < shots; i++) {
+    ctx.token.throwIfCancelled();
+    const aim = solveAim(ctx.mirror.eye, { x: target.x, y: target.y + 1, z: target.z });
+    if (!aim) throw new GolemError("unreachable", `${fmtPos(target)} is out of bow range at any angle`);
+    pitch = aim.pitch;
+    await ctx.body.call("look", { yaw: aim.yaw, pitch: aim.pitch });
+    await useHold(ctx, 25);
+    // Re-aim after the draw: the arrow leaves along wherever the head is on the release tick.
+    await ctx.body.call("look", { yaw: aim.yaw, pitch: aim.pitch });
+    await sleep(150, ctx.token);
+    await useRelease(ctx);
+    fired++;
+    if (i < shots - 1) await sleep(600, ctx.token);
+  }
+  return { fired, pitch };
+}
+
 export interface ShootAtOpts { lead?: boolean; charge?: number; shots?: number; maxRange?: number }
 export interface MeleeWhileOpts { maxMs?: number; reach?: number; stopBelowHealth?: number }
 

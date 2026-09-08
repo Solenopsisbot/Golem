@@ -53,6 +53,7 @@ export function makePrimitives(ctx: Ctx) {
     // actions
     mine: bind(ctx, actions.mine),
     shootAt: bind(ctx, actions.shootAt),
+    shootStatic: bind(ctx, actions.shootStatic),
     meleeWhile: bind(ctx, actions.meleeWhile),
     combatStop: bind(ctx, actions.combatStop),
     digDown: bind(ctx, actions.digDown),
