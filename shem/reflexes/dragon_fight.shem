@@ -40,7 +40,13 @@ reflex dragon_fight priority 93 on tick when dimension == "the_end" and nearest(
       // firing. Tester spent 56 arrows this way for nothing across two runs before working out - on
       // its own, in a script comment - that the answer is to stand underneath and fire almost
       // straight up, where the pillar cannot be in the way and the range is just the height.
-      if (crystal.dist > 10) {
+      // HORIZONTAL distance decides whether to walk, never `crystal.dist`. That field is 3D, and a
+      // crystal 23 blocks straight overhead reads as 23 away while you are already standing on the
+      // pillar's foot - so a 3D test walks you to a pillar you are stood on, forever, and never fires
+      // a shot. This is the same mistake in the same place twice: it is what made Tester read
+      // reachable crystals as "caged" in r4, and I then wrote it into this reflex while fixing that.
+      let chor = max(abs(crystal.pos.x - here.x), abs(crystal.pos.z - here.z))
+      if (chor > 6) {
         try { timeout 8s { goto_xz(int(crystal.pos.x), int(crystal.pos.z), reach: 4) } }
         catch (e) { log "to pillar: ${e.kind}" }
       } else if (crystal.dist < 6) {
