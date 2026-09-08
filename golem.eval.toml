@@ -26,7 +26,17 @@ persona = "personas/clay.md"
 model = "opus"
 effort = "high"
 
-# Stock reflexes only. dragon_fight exists and is documented in the library index, but switching it on
-# is the agent's decision to make (reflex_set), not the fixture's to make for it.
+# dragon_fight is ON for this measurement, which is a deliberate change from "the agent decides".
+#
+# Four full runs with it off ended the same way: 10 crystals standing, dragon at 200, and deaths in
+# double figures. The reason is structural rather than a failure of judgement. A planning turn takes
+# 50 to 950 seconds; the dragon kills an armoured bot in two hits; and with dragon_fight off the only
+# always-on behaviour in a boss fight is self_preservation, which exclusively runs away. The agent
+# reasons well - it correctly diagnosed that a 45-block diagonal bow shot falls short and switched to
+# firing straight up from the pillar foot - but it never lives long enough to run what it writes.
+#
+# So this is an experiment to isolate one variable, not a settled default. Whether a shipped reflex
+# belongs in default_on for a boss rung, or whether the agent should have to reach for it itself, is
+# a judgement call about how much the mind is meant to do - and that call is Viola's, not this file's.
 [reflexes]
-default_on = ["auto_respawn", "bunker", "self_preservation", "unstuck", "auto_eat", "item_collecting", "idle_staring"]
+default_on = ["auto_respawn", "bunker", "self_preservation", "unstuck", "auto_eat", "item_collecting", "idle_staring", "dragon_fight"]

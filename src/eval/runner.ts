@@ -27,6 +27,7 @@ export class EvalRunner {
   private endRespawn: { x: number; y: number; z: number } | null = null;
   /** A vetted second respawn spot, used when the dragon is loitering on the first. undefined = not yet checked. */
   private endRespawnAlt: { x: number; y: number; z: number } | null | undefined = undefined;
+  private endRespawnAltTries = 0;
   constructor(opts: RunnerOptions) { this.opts = opts; }
 
   private async rconConnect(): Promise<Rcon> {
@@ -45,6 +46,7 @@ export class EvalRunner {
     const r = await this.rconConnect();
     this.endRespawn = null;
     this.endRespawnAlt = undefined;
+    this.endRespawnAltTries = 0;
     const run = async (c: string) => { const out = await r.command(c.replace(/\{bot\}/g, bot)); log.debug(`rcon ${c} -> ${out.slice(0, 80)}`); };
     const s = task.setup;
     // Keep gear through death: a combat rung that respawns the bot into the fight must not strip it
@@ -235,8 +237,17 @@ export class EvalRunner {
           const below = await r.command(`execute in minecraft:the_end unless block ${alt.x} ${alt.y + dy - 1} ${alt.z} minecraft:air run data get entity ${bot} Health`);
           if (feet.includes("Health") && below.includes("Health")) { alt.y = alt.y + dy; ok = true; break; }
         }
-        this.endRespawnAlt = ok ? alt : null;
-        log.info(ok ? `end respawn alternative vetted at ${alt.x},${alt.y},${alt.z}` : "no vetted end respawn alternative; keeping the original");
+        // Only cache a success. A failure here is much more likely to mean "the End chunks were not
+        // loaded yet" than "there is no ground there": the first poll lands about five seconds into
+        // the rung, and run 31 vetted at 09:53:16 against chunks that did not exist yet, read every
+        // candidate as non-air, and cached that "no" for the whole two hours. Retry instead.
+        if (ok) {
+          this.endRespawnAlt = alt;
+          log.info(`end respawn alternative vetted at ${alt.x},${alt.y},${alt.z}`);
+        } else if (++this.endRespawnAltTries >= 12) {
+          this.endRespawnAlt = null;   // a minute of trying; the island really has nothing there
+          log.info("no vetted end respawn alternative after a minute of trying; keeping the original");
+        }
       }
       let spot = p;
       const alt = this.endRespawnAlt;
