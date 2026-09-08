@@ -71,7 +71,9 @@ reflex dragon_fight priority 93 on tick when dimension == "the_end" and nearest(
         // arrows entirely and several pillars on a fresh island are caged.
         try { melee_while(crystal, max_ms: 2000) } catch (e) { log "crystal melee: ${e.kind}" }
       } else {
-        try { shoot_at(crystal, shots: 3) } catch (e) { log "crystal: ${e.kind}" }
+        // shoot_static, not shoot_at: the body's aim is about half the drop it needs at this range
+        // and buries the arrows in the pillar two blocks under the crystal, tightly grouped.
+        try { shoot_static(crystal, shots: 3) } catch (e) { log "crystal: ${e.kind}" }
       }
     } else if (d != none and inventory.count("arrow") < 24) {
       // Nearly dry, and no crystal in sight. Arrows are the only ranged answer here, so go and pick

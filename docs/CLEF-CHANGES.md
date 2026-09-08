@@ -242,6 +242,30 @@ headless without Golem still hits it, and it stays silent when they do.
 fail loudly rather than return OK. A no-op that reports success is much more expensive to debug
 than an error.
 
+### 23. `shootAt` under-compensates arrow drop by about half (measured, 2026-09-08)
+
+`shootAt`'s solver lands arrows roughly two blocks low at 25-50 blocks, consistently and in a tight
+group - it is a systematic bias, not scatter. Against an end crystal on a pillar this reads as
+"caged": every arrow buries itself in the obsidian just under the crystal it was aimed at.
+
+Measured against a crystal 25 blocks out and 25 up, firing three full-charge arrows per setting and
+aiming at target + drop:
+
+| drop model | arrows landed | result |
+|---|---|---|
+| `10*t^2` (half gravity) | 8.6 blocks low | miss |
+| `15*t^2` | 1.2 blocks low | miss |
+| `20*t^2` | on target | **crystal destroyed** |
+
+`t = distance / 53`. The naive figure is what you get treating the arrow as drag-free: gravity is
+20 blocks/s^2, so `0.5*g*t^2` = `10*t^2`. A real arrow sheds about 1% of its speed per tick, so it
+is in the air appreciably longer, and drop goes as t^2 - hence roughly double.
+
+Golem now does its own aiming for stationary targets (`shoot_static` in `lib/combat`) rather than
+call `shootAt`, which is a workaround in the wrong repo. If `CombatController` is using `0.5*g*t^2`
+or a fixed fudge, applying drag to the flight-time estimate should fix it for everything - the same
+bias will be there for mobs at range, just harder to notice because they move.
+
 ## What Baritone already covers (no Clef change needed)
 
 Verified against the bundled Baritone 1.15.0 jar: `axis blacklist build click come eta elytra explore explorefilter farm find follow forcecancel gc goal goto help invert litematica mine path pickup proc reloadall render repack saveall schematica sel set surface thisway tunnel version waypoints`.
