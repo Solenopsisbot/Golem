@@ -138,6 +138,12 @@ export function makeShemHost(rt: AgentRuntime): Host {
     const r = await p.shootAt(id, { shots: toNum(arg(a, n, 1, "shots") ?? 1), lead: arg(a, n, 2, "lead") !== false, charge: toNum(arg(a, n, 3, "charge") ?? 25), maxRange: toNum(arg(a, n, 4, "max_range") ?? 64) });
     return { fired: r.fired, hits: r.hits, damage: r.damage, killed: r.killed, stopped: r.stopped, ticks: r.ticks };
   });
+  def("pearl_to", async (p, a, n) => {
+    const t = arg(a, n, 0, "pos");
+    const tp = (t as { pos?: { x: number; y: number; z: number } })?.pos ?? t;
+    const r = await p.pearlTo(posOf(tp as never));
+    return { pitch: r.pitch, yaw: r.yaw, ticks: r.ticks };
+  });
   def("shoot_static", async (p, a, n) => {
     const t = arg(a, n, 0, "target");
     const tp = (t as { pos?: { x: number; y: number; z: number } })?.pos ?? t;

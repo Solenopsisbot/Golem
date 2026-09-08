@@ -1,0 +1,64 @@
+/// Working in the End: crystals, cages and firing positions.
+///
+/// These are the mechanics, not a plan. Which crystal to take, when to break off, whether to bother
+/// with the caged ones and when to turn on the dragon are all yours - this is just the arithmetic
+/// that is tedious to rediscover from inside a fight.
+
+use "lib/combat"
+
+/// Where to stand to have a clear shot at a crystal on a pillar. Returns a ground position.
+///
+/// NOT underneath it. The pillar is in the way and no arc gets over it: from four blocks out, the
+/// line to a crystal seventeen up passes through the obsidian, and a bow cannot launch fast enough
+/// to clear its own pillar. The sight line clears the rim at about d > (h - 1.6) * r / 2, and End
+/// pillars are roughly two blocks in radius, so the standoff is close to the crystal's own height -
+/// eighteen blocks out for one seventeen up, forty-two for one forty-one up, both inside range.
+script standoff_for(c): pos {
+  let dy = max(1.0, c.pos.y - here.y)
+  let so = min(52.0, max(14.0, 1.2 * dy))
+  let dx = here.x - c.pos.x
+  let dz = here.z - c.pos.z
+  let l = max(1.0, max(abs(dx), abs(dz)))
+  return pos(int(c.pos.x + dx / l * so), int(here.y), int(c.pos.z + dz / l * so))
+}
+
+/// Is this crystal inside an iron bar cage?
+///
+/// Bars stop arrows dead, and there is no pickaxe in a starting End kit unless you brought one, so a
+/// caged crystal is often simply not available. Two things worth knowing before you write one off:
+/// the cages have no roof, so a steep enough shot drops in from above; and a crystal only heals the
+/// dragon within 32 blocks of it, so a cage out on the ring does nothing while the dragon is perched
+/// on the fountain.
+///
+/// Only sees bars near YOU - find_blocks searches from the bot - so check it from somewhere close.
+script caged(c, radius: float = 64): bool {
+  for (b of find_blocks(["iron_bars"], radius: radius, max: 200)) {
+    if (max(abs(b.pos.x - c.pos.x), abs(b.pos.z - c.pos.z)) <= 2 and abs(b.pos.y - c.pos.y) <= 3) {
+      return true
+    }
+  }
+  return false
+}
+
+/// Walk to a clear firing position and put arrows into one crystal. True if it went.
+///
+/// Aims through `shoot_static`, which solves the shot by simulating the arrow rather than applying a
+/// drop rule - a fitted constant is right at exactly the range it was measured at and nowhere else.
+script pop_crystal(c, shots: int = 3): bool {
+  let before = len(find_entities("end_crystal", radius: 240))
+  let s = standoff_for(c)
+  try { timeout 20s { goto_xz(s.x, s.z, reach: 4) } } catch (e) { log "approach: ${e.kind}" }
+  try { shoot_static(c, shots: shots) } catch (e) { log "shoot: ${e.kind} ${e.message}" }
+  return len(find_entities("end_crystal", radius: 240)) < before
+}
+
+/// How far the dragon is from the fountain, horizontally. Under about 12 means it has perched.
+///
+/// The perch is the fight: a perched dragon holds still and takes full sword damage, where arrows at
+/// a circling one mostly miss. It is also out of healing range of anything on the pillar ring, so
+/// crystals you could not reach stop mattering once it comes down.
+script dragon_offset(): float {
+  let d = nearest("ender_dragon", 200)
+  if (d == none) { return 999.0 }
+  return max(abs(d.pos.x), abs(d.pos.z))
+}

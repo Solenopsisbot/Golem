@@ -366,6 +366,31 @@ export async function shootStatic(ctx: Ctx, target: Pos, shots = 1): Promise<{ f
   return { fired, pitch };
 }
 
+/**
+ * Throw an ender pearl at a position and land on it.
+ *
+ * Aiming a pearl by hand is guesswork: it leaves at half an arrow's speed with two-thirds the
+ * gravity, so it needs a noticeably different angle for the same distance and no rule of thumb
+ * carries over. This solves it the same way the bow does, by simulating the throw.
+ *
+ * Costs 5 damage on landing. That is usually the cheap option - walking out of a dragon breath pool
+ * takes several seconds and every one of them is spent inside it - but it is not free, so check your
+ * health first. It is also the fastest way off the arrival platform or across a gap you have not
+ * bridged.
+ */
+export async function pearlTo(ctx: Ctx, target: Pos): Promise<{ pitch: number; yaw: number; ticks: number }> {
+  const inv = await inventory(ctx);
+  if (!inv.has("ender_pearl")) throw new GolemError("missing_item", "no ender pearls");
+  const to = { x: target.x + 0.5, y: target.y, z: target.z + 0.5 };
+  const aim = solveAim(ctx.mirror.eye, to, PEARL);
+  if (!aim) throw new GolemError("unreachable", `${fmtPos(target)} is out of pearl range at any angle`);
+  await selectItem(ctx, "ender_pearl");
+  await ctx.body.call("look", { yaw: aim.yaw, pitch: aim.pitch });
+  await sleep(120, ctx.token);
+  await useItem(ctx);
+  return aim;
+}
+
 export interface ShootAtOpts { lead?: boolean; charge?: number; shots?: number; maxRange?: number }
 export interface MeleeWhileOpts { maxMs?: number; reach?: number; stopBelowHealth?: number }
 
