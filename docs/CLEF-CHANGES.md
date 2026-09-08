@@ -303,6 +303,29 @@ Same shape as #22 (`closeScreen` hardcoding `closed: true`) and worth a sweep fo
 generally: a command that performs an action and then asserts success without reading the world back
 is the most expensive kind of bug to find from the outside, because every log line looks healthy.
 
+### 25. `blockAt` cannot say "I do not know" (found by the agent, 2026-09-08)
+
+Tester again, in a script comment: *"block_at on an unloaded chunk answers 'air', which is how r22
+decided a 20-block obsidian pillar had no top."*
+
+`mc.level.getBlockState` on a position outside the client's loaded chunks returns `Blocks.AIR`, and
+`blockAt` passes that straight back. So `air: true` means either "there is nothing there" or "I
+cannot see that far", and nothing in the response separates them. A bot probing a distant structure
+gets a confident, wrong, and entirely plausible answer.
+
+Please say which it is:
+
+```
+blockAt {x,y,z}  ->  {block, air, loaded: bool}
+```
+
+`loaded: false` would let a caller walk into range and re-ask instead of believing the air. The
+client already knows - `level.getChunkSource().hasChunk(x >> 4, z >> 4)` or equivalent - and the
+caller has no way to work it out from the outside.
+
+Same shape as #22 and #24: a command that answers confidently where it should say it does not know.
+That family has cost more debugging time on this project than every other bug combined.
+
 ## What Baritone already covers (no Clef change needed)
 
 Verified against the bundled Baritone 1.15.0 jar: `axis blacklist build click come eta elytra explore explorefilter farm find follow forcecancel gc goal goto help invert litematica mine path pickup proc reloadall render repack saveall schematica sel set surface thisway tunnel version waypoints`.

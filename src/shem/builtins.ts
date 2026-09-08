@@ -43,7 +43,7 @@ export const GETTERS: GetterSpec[] = [
 
 export const BUILTINS: BuiltinSpec[] = [
   // ---- perception ----------------------------------------------------------------
-  { name: "block_at", params: [p("pos", "pos")], returns: "block", doc: "Block record at a position: .name (\"stone\") .id (\"minecraft:stone\") .air .solid .liquid .pos", blocking: true },
+  { name: "block_at", params: [p("pos", "pos")], returns: "block", doc: "Block record at a position: .name (\"stone\") .id (\"minecraft:stone\") .air .solid .liquid .pos. CAUTION: a position in a chunk the client has not loaded answers .air = true, so \"air\" and \"I cannot see that far\" are the same answer. Probing a distant pillar this way reports no top. Walk into range first, or use find_blocks.", blocking: true },
   { name: "find_blocks", params: [p("kinds", "block"), p("radius", "int", "32"), p("max", "int", "32")], returns: "list<block>", doc: "Nearest blocks of a kind (or list of kinds), nearest first; each has .pos .block .dist", blocking: true },
   { name: "find_entities", params: [p("kinds", "entity", "none"), p("radius", "float", "16"), p("hostile", "bool", "false")], returns: "list<entity>", doc: "Nearby entities, nearest first: .id .type .short .name .pos .dist .hostile .health", blocking: true },
   { name: "nearest", params: [p("kinds", "entity", "none"), p("radius", "float", "16")], returns: "entity?", doc: "Nearest entity of the kinds, or none.", blocking: true },
