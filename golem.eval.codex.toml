@@ -1,0 +1,42 @@
+# Eval fleet with OpenAI Codex as the mind, on the same ports as golem.eval.toml.
+#
+# Same rungs, same body, same reflexes - only the thing doing the thinking changes. Run one or the
+# other, never both: they share the MCP bind and the Clef control port.
+[fleet]
+name = "eval-codex"
+data_dir = "./data"
+mcp_bind = "127.0.0.1:8771"
+
+[clef]
+launcher = "../MezzoSopranoClef/launcher/build/libs/mezzosopranoclef-launcher-0.1.0.jar"
+server = "127.0.0.1:25566"
+auth = "offline"
+base_port = 9741
+max_heap = "1024m"
+
+[players]
+owners = ["owner"]            # the eval runner sends goals as this player
+
+[[agents]]
+name = "Tester"
+persona = "personas/clay.md"
+
+[mind]
+command = "node"
+args = ["adapters/codex-acp.ts"]   # Golem's own ACP adapter over `codex app-server`, so it drives whatever the installed codex supports
+permission_mode = "full-access"    # codex modes are read-only|auto|full-access; full-access is the one that never prompts
+# Codex manages its own context and has no equivalent of Claude Code's early-compaction window, so
+# leave it alone rather than pushing a number it will ignore.
+compact_window = 0
+
+# Both tiers on the same model: a two-tier split exists to buy cheap act turns from a cheaper model,
+# and there is nothing to compare against yet on this side. One model, one effort, so the run says
+# something about gpt-5.6-sol rather than about a routing policy.
+[mind.models]
+plan = { model = "gpt-5.6-sol", effort = "medium" }
+act = { model = "gpt-5.6-sol", effort = "medium" }
+
+# Same stock reflexes as the Claude eval fleet. dragon_fight stays off by default: switching it on is
+# the agent's call to make, and keeping the fixture identical is the only way the two runs compare.
+[reflexes]
+default_on = ["auto_respawn", "bunker", "self_preservation", "unstuck", "auto_eat", "item_collecting", "idle_staring"]
