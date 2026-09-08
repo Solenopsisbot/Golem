@@ -219,7 +219,13 @@ export class Drive {
       this.push({ kind: "damage", priority: d.health <= 6 ? 85 : 70, text: `took ${d.amount.toFixed(1)} damage${attacker}; hp ${d.health.toFixed(0)}` });
     });
     b.on("death", () => {
-      const where = fmtPos(m.blockPos);
+      // Name the dimension. "You died at (73, 57, -10)" is ambiguous across three worlds that share a
+      // coordinate space, and the bot respawns somewhere that may not be the one it died in: Tester
+      // died in the End, woke in the overworld, and walked two hundred blocks to those coordinates
+      // THERE while its gear sat in the End and despawned. It was reasoning correctly from what we
+      // told it; we just did not tell it which world.
+      const dim = (m.status?.player?.dimension ?? "").replace("minecraft:", "");
+      const where = `${fmtPos(m.blockPos)}${dim ? ` in the ${dim.replace(/_/g, " ")}` : ""}`;
       this.journal.note(`died at ${where}`);
       const now = Date.now();
       this.deathTimes.push(now);
@@ -234,7 +240,7 @@ export class Drive {
         this.deathLoopUntil = now + 60_000;
         return;
       }
-      this.push({ kind: "death", priority: 95, text: `you died at ${where}. Your items are there if you want them back.` });
+      this.push({ kind: "death", priority: 95, text: `you died at ${where}. Your items are there if you want them back - and if that is not the dimension you just respawned in, you have to travel there first.` });
     });
     b.on("respawn", () => this.push({ kind: "respawn", priority: 60, text: `respawned at ${fmtPos(m.blockPos)}` }));
     b.on("join", (d: { name: string }) => { if (d.name !== a.body.username) this.push({ kind: "player_join", priority: 20, text: `${d.name} joined`, from: d.name }); });
