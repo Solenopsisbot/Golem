@@ -49,21 +49,44 @@ motd=Golem dev world
 PROPS
 fi
 
+# Set a server.properties key, replacing the line if present and appending it if not.
+#
+# `sed -i` takes a mandatory suffix argument on BSD/macOS and a forbidden one on GNU/Linux, so a
+# script hardcoding either form runs on half the machines it is copied to. This one broke the moment
+# the repo was cloned onto Linux. Rewrite in place with python instead and stay out of the argument.
+setprop() {
+  python3 - "$DIR/server.properties" "$1" "$2" <<'PYPROPS'
+import re, sys
+path, key, value = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    with open(path) as f: text = f.read()
+except FileNotFoundError:
+    text = ""
+line = f"{key}={value}"
+if re.search(rf"^{re.escape(key)}=", text, flags=re.M):
+    text = re.sub(rf"^{re.escape(key)}=.*$", line, text, flags=re.M)
+else:
+    if text and not text.endswith("\n"): text += "\n"
+    text += line + "\n"
+with open(path, "w") as f: f.write(text)
+PYPROPS
+}
+
 # Keep the difficulty line in sync with MC_DIFFICULTY even on an existing properties file.
-sed -i '' "s/^difficulty=.*/difficulty=$DIFFICULTY/" "$DIR/server.properties"
+setprop difficulty "$DIFFICULTY"
 
 # The ender dragon throws players around, and Baritone's movement looks like flight to the vanilla
 # check, which kicks the bot mid-fight ("Flying is not enabled on this server"). A bot that gets
 # disconnected for being airborne cannot fight anything that launches it.
-grep -q '^allow-flight=' "$DIR/server.properties" && sed -i '' "s/^allow-flight=.*/allow-flight=true/" "$DIR/server.properties" || echo "allow-flight=true" >> "$DIR/server.properties"
+setprop allow-flight "true"
 
 # RCON for the eval runner (world resets without op-ing the bot). Password lives next to the world.
 RCON_PORT="${MC_RCON_PORT:-25576}"
 [[ -f "$DIR/rcon.password" ]] || python3 -c "import secrets;print(secrets.token_urlsafe(18))" > "$DIR/rcon.password"
 RCON_PASS="$(cat "$DIR/rcon.password")"
-grep -q '^enable-rcon=' "$DIR/server.properties" && sed -i '' "s/^enable-rcon=.*/enable-rcon=true/" "$DIR/server.properties" || echo "enable-rcon=true" >> "$DIR/server.properties"
-grep -q '^rcon.port=' "$DIR/server.properties" && sed -i '' "s/^rcon.port=.*/rcon.port=$RCON_PORT/" "$DIR/server.properties" || echo "rcon.port=$RCON_PORT" >> "$DIR/server.properties"
-grep -q '^rcon.password=' "$DIR/server.properties" && sed -i '' "s|^rcon.password=.*|rcon.password=$RCON_PASS|" "$DIR/server.properties" || echo "rcon.password=$RCON_PASS" >> "$DIR/server.properties"
+setprop enable-rcon "true"
+setprop rcon.port "$RCON_PORT"
+setprop rcon.password "$RCON_PASS"
 
 cd "$DIR"
 if [[ "${1:-}" == "--bg" ]]; then
