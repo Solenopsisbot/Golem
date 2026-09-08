@@ -129,7 +129,25 @@ export class EvalRunner {
       // minute, and losing the dimension outright is a harness artefact, not part of the fight.
       const posOut = await r.command(`data get entity ${bot} Pos`);
       const at = posOut.match(/\[(-?[\d.]+)d, (-?[\d.]+)d, (-?[\d.]+)d\]/);
-      if (at) this.endRespawn = { x: Math.round(Number(at[1])), y: Math.round(Number(at[2])), z: Math.round(Number(at[3])) };
+      if (at) {
+        const x = Math.round(Number(at[1])), z = Math.round(Number(at[3]));
+        let y = Math.round(Number(at[2]));
+        // Find real standing room in that column before trusting the height.
+        //
+        // `spreadplayers` reports the bot's position immediately, which is usually mid-fall, so the
+        // y read back here is often metres below the surface it is about to land on. Recording that
+        // buries the respawn inside the island: run 37 spawned at (20, 57, 60) with solid rock from
+        // 56 to 64, suffocated, died, respawned in the same rock, and lost seven lives in two
+        // minutes without the dragon touching it. Deaths are the headline metric on this rung, so a
+        // respawn point inside a wall poisons the whole measurement.
+        const air = async (ax: number, ay: number, az: number) =>
+          (await r.command(`execute in minecraft:the_end if block ${ax} ${ay} ${az} minecraft:air run data get entity ${bot} Health`)).includes("Health");
+        for (let probe = Math.max(y, 40); probe <= 120; probe++) {
+          if (await air(x, probe, z) && await air(x, probe + 1, z) && !(await air(x, probe - 1, z))) { y = probe; break; }
+        }
+        this.endRespawn = { x, y, z };
+        log.info(`end respawn at ${x},${y},${z}`);
+      }
     } else if (dim) {
       await run(`execute in ${dim} run tp ${bot} ~ 70 ~`);
       await run(`execute at ${bot} run spawnpoint ${bot} ~ ~ ~`);
