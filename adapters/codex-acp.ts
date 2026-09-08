@@ -16,7 +16,8 @@ import { spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 
-const REASONING_EFFORTS = ["minimal", "low", "medium", "high", "xhigh"];
+// What codex advertises per model; the union across models, filtered by what each one supports.
+const REASONING_EFFORTS = ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
 const MODES: acp.SessionMode[] = [
   { id: "read-only", name: "read-only" },
   { id: "auto", name: "auto" },
@@ -101,8 +102,11 @@ async function main(): Promise<void> {
   await rpc.request("initialize", { clientInfo: { name: "golem-codex-acp", version: "0.1.0" }, capabilities: {} });
   rpc.notify("initialized", {});
   try {
-    const ml = await rpc.request<{ items?: { id: string }[]; models?: { id: string }[] }>("model/list", {});
-    models = (ml.items ?? ml.models ?? []).map((m) => m.id).filter(Boolean);
+    // codex answers model/list with {data: [...]}. It was read as {items}/{models} here, so the list
+    // came back empty, Golem warned `no model matching "gpt-5.6-sol" (have: )` and fell back to the
+    // default model - the config was being silently ignored.
+    const ml = await rpc.request<{ data?: { id: string }[]; items?: { id: string }[]; models?: { id: string }[] }>("model/list", {});
+    models = (ml.data ?? ml.items ?? ml.models ?? []).map((m) => m.id).filter(Boolean);
     if (models.length) currentModel = cfg.model && models.includes(cfg.model) ? cfg.model : models[0]!;
   } catch (e) { log("model/list failed:", (e as Error).message); }
   if (cfg.model) currentModel = cfg.model;
@@ -151,7 +155,17 @@ async function main(): Promise<void> {
         break;
       }
       case "error": {
-        log("codex error notification:", JSON.stringify(p).slice(0, 300));
+        // Say what went wrong. ACP has no error stop reason, so this arrives at Golem as "refusal" -
+        // which reads as the model declining the task when it is usually a transport or quota fault.
+        // Push the text into the transcript first so the log says something more useful than the
+        // word "refusal" with an empty message beside it.
+        const detail = String((p as { message?: string; error?: { message?: string } }).message
+          ?? (p as { error?: { message?: string } }).error?.message
+          ?? JSON.stringify(p)).slice(0, 500);
+        log("codex error notification:", detail);
+        if (threadId) {
+          void conn.sessionUpdate({ sessionId: threadId, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: `[codex error] ${detail}` } } });
+        }
         if (st && st.waiter) { const w = st.waiter; st.waiter = null; w.resolve({ stopReason: "refusal" }); }
         break;
       }
