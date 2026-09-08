@@ -5,6 +5,7 @@ import type { Entity } from "../primitives/perception.ts";
 import type { Reflex } from "./engine.ts";
 import { dist, fmtPos } from "../util/geom.ts";
 import { GolemError } from "../primitives/errors.ts";
+import { PEARL, solveAim } from "../primitives/actions.ts";
 
 export const autoRespawn: Reflex<true> = {
   name: "auto_respawn",
@@ -115,6 +116,28 @@ async function escapeCloud(p: import("../primitives/index.ts").Primitives): Prom
           p.blockAt({ ...spot, y: spot.y - 1 }), p.blockAt(spot), p.blockAt({ ...spot, y: spot.y + 1 }),
         ]);
         if (!floor.solid || BAD_FOOTING.has(floor.id) || !feet.air || !head.air) continue;
+        // Pearl out when the walk is the thing killing us.
+        //
+        // Walking clear takes seconds and every one of them is spent inside the cloud, which is why
+        // moving twice - at 14 hp and again at 4 - still ended in a death. A pearl is instant. It
+        // costs 5 on landing, so only throw one with enough health left to pay that, and only when
+        // the distance makes it worth it.
+        const hp = p.ctx.mirror.health;
+        const far = Math.hypot(spot.x - here.x, spot.z - here.z);
+        if (hp <= 14 && hp >= 8 && far >= 8) {
+          const pearls = await p.inventory().then((i) => i.count("ender_pearl")).catch(() => 0);
+          if (pearls > 0) {
+            const aim = solveAim(p.ctx.mirror.eye, { x: spot.x + 0.5, y: spot.y, z: spot.z + 0.5 }, PEARL);
+            if (aim) {
+              try {
+                await p.equip("ender_pearl");
+                await p.lookAt({ x: spot.x + 0.5, y: spot.y, z: spot.z + 0.5 });
+                await p.useItem();
+                return `${clouds.length} lingering cloud(s): pearled to ${fmtPos(spot)} at ${hp.toFixed(0)} hp`;
+              } catch { /* fall through to walking */ }
+            }
+          }
+        }
         // Six seconds, not twelve: the reflex re-fires every four, and a long goal that cannot be
         // reached just stacks moves until the body starts answering RATE_LIMIT.
         try { await p.goto(spot, { reach: 1, timeoutMs: 6000 }); }

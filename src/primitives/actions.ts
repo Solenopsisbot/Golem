@@ -276,7 +276,14 @@ export interface AimSolution { yaw: number; pitch: number; ticks: number }
  * So simulate instead, and binary-search the launch angle. `null` means the shot is out of range at
  * any angle - worth knowing rather than firing anyway.
  */
-export function solveAim(from: Vec, to: Vec): AimSolution | null {
+/** Launch physics for a thrown thing: blocks per tick, gravity per tick, per-tick drag. */
+export interface Ballistics { speed: number; gravity: number; drag: number }
+/** A fully drawn bow. */
+export const ARROW: Ballistics = { speed: 3.0, gravity: 0.05, drag: 0.99 };
+/** An ender pearl: slower and floatier than an arrow, so it needs a much higher angle for the range. */
+export const PEARL: Ballistics = { speed: 1.5, gravity: 0.03, drag: 0.99 };
+
+export function solveAim(from: Vec, to: Vec, b: Ballistics = ARROW): AimSolution | null {
   const dx = to.x - from.x, dz = to.z - from.z;
   const dy = to.y - from.y;
   const flat = Math.hypot(dx, dz);
@@ -286,12 +293,12 @@ export function solveAim(from: Vec, to: Vec): AimSolution | null {
   // Height the arrow has when it crosses `flat`, launched at `elev` degrees above horizontal.
   const heightAt = (elev: number): { y: number; ticks: number } => {
     const r = elev * Math.PI / 180;
-    let vx = Math.cos(r) * 3.0, vy = Math.sin(r) * 3.0;
+    let vx = Math.cos(r) * b.speed, vy = Math.sin(r) * b.speed;
     let x = 0, y = 0;
     for (let t = 1; t <= 400; t++) {
       const px = x, py = y;
       x += vx; y += vy;
-      vx *= 0.99; vy *= 0.99; vy -= 0.05;
+      vx *= b.drag; vy *= b.drag; vy -= b.gravity;
       if (x >= flat) {
         // Interpolate within the tick it crosses the target's distance.
         const f = (flat - px) / (x - px);
