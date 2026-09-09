@@ -366,3 +366,11 @@ Everything Golem touched works: `findBlocks`, `mine {wait}` (returns `{broken, t
 - Everything above stays behind `hasSubscribers(...)` gating for events and `onMain` for world access, like the existing code.
 - New commands get `ApiSchema` entries and regenerated `clients/schema.json`; Golem generates its typed body client from that file, so drift is a build failure on our side too.
 - Decide read-only scope membership for each: `findBlocks`, `blocksIn`, `recipes`, `craftable`, `registry`, `target`, `chatHistory` are read-only; the rest actuate.
+
+## Feedback from 26.2 end-to-end run (2026-09-09)
+
+- **Connection stability:** the client repeatedly entered `NOT_CONNECTED` during active Shem runs. Golem's reconnect eventually worked, but in-flight mining/crafting runs failed and the model lost continuity. Please make reconnect state explicit and avoid reporting a normal world state until command traffic is usable.
+- **Mining completion:** direct `mine {wait:true}` frequently took 8–17 seconds and sometimes ended `CANT_BREAK` on an exposed, valid ore block. Include a precise failure reason (out of reach, wrong tool, blocked face, server refusal) and ensure the break loop refreshes reach after navigation.
+- **Screen lifecycle:** status briefly reported `screen:downloading` while the player was already in-world. That caused actions to be attempted during a transient screen state. Expose a stable `screen.kind`/ready signal or suppress world actions until the screen is cleared.
+- **Entity lifecycle:** `lookAt` and idle-staring occasionally targeted an entity id that had already despawned, returning `NOT_FOUND`. Treat stale entity ids as benign/retryable rather than surfacing them as a body fault.
+- **Replay output:** the 26.2 run produced no sealed `.mcpr` before shutdown despite replay being enabled. Please verify recorder arming, autosave-on-disconnect, and the configured output directory on native 26.2.
