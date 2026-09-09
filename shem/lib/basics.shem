@@ -56,3 +56,11 @@ script announce_arrival(target: pos, text: string = "here") {
   goto(target, reach: 2)
   say text
 }
+
+/// Use Baritone to reach an exact block, then break only that block with Clef.
+/// This is the precision-safe form for a known coordinate: Baritone handles the approach,
+/// while the final break cannot wander onto adjacent matching blocks.
+script mine_precise(target: pos, collect: bool = true) {
+  goto(target, reach: 2, timeout: 60s)
+  return mine(target, approach: false, collect: collect)
+}
