@@ -120,7 +120,7 @@ Blocking unless stated. Default timeouts in brackets. "Clef:" names the commands
 | `here`, `eye`, `me`, `yaw`, `pitch` | Position, eye position, own entity, orientation. |
 | `health`, `food`, `air`, `xp`, `dimension`, `gamemode` | Numbers and strings. `gamemode` needs Clef #5. |
 | `time`, `time.phase`, `is_day`, `weather`, `biome`, `light_at(pos)` | Needs Clef #5 for weather/biome/light. |
-| `block_at(pos)` | `{ id, air, solid, liquid, pos }`. Clef: `blockAt`. |
+| `block_at(pos)` | `{ id, name, air, solid, liquid, known, pos }`. `known` is false when the chunk isn't loaded on the client - the body answers "air" for "I can't see", so a script that trusts it digs into what it thinks is nothing (**CLEF #25**). Clef: `blockAt`. |
 | `find_blocks(kinds, radius, max: 32, sort: "nearest")` | `list<pos>`. Clef: `findBlocks` (**needs #1**). |
 | `blocks_in(min, max)` | Region dump, palette-compressed, for building and mapping. **Needs #1.** |
 | `find_entities(kinds?, radius: 16, hostile?: bool)` | `list<entity>`; entity has `id type name pos dist health? hostile? held?`. Clef: `entities` (**richer with #4**). |
@@ -158,6 +158,11 @@ Blocking unless stated. Default timeouts in brackets. "Clef:" names the commands
 | `use_item(hand?)`, `use_on(pos | entity, hand?)`, `hold_use(ticks)`, `release_use()` | Right-click family. Clef: `use`, `place`, `interactEntity`, `useHold`, `useRelease`. |
 | `attack(entity)` [30s] | Approach to reach and swing until dead or gone. Clef: `attack` + `entities`. |
 | `attack_nearest(kinds, radius)` | |
+| `shoot_at(target, shots, lead, charge, max_range)` [30s] | Bow something that MOVES. The aiming loop runs on the body at 20 Hz: track, lead from real velocity, solve the drop, loose. Aiming from a script costs ~1.5 s a shot and misses. Clef: `shootAt` (**#19**). |
+| `shoot_static(target, shots)` [30s] | Bow something that does NOT move - a crystal, a spawner. Solves the launch angle by simulating the arrow (drag included), so it holds at any range. Aims a block above the target's `pos`, which is its feet. |
+| `melee_while(target, max_ms, reach, stop_below_health)` [30s] | Swing on the body's attack-cooldown cadence while the target stays in reach, and resolve multi-part entities. `attack()` on a boss's parent entity registers nothing at all. Clef: `meleeWhile` (**#19**). |
+| `pearl_to(pos)` | Throw an ender pearl to a position and land there, solved by simulation (a pearl is slower and floatier than an arrow). Costs 5 damage. The fastest way across a gap, and out of dragon breath. |
+| `require_dimension(name)` | Instant. Fail unless the bot is in `"the_end"` / `"overworld"` / `"the_nether"`. Put it at the top of any script holding hardcoded coordinates: the three worlds share a coordinate space, so a plan written in one runs happily and wrongly in another, and dying is what moves you. |
 | `equip(item)`, `unequip(slot)` | Clef: `equip`, `clickSlot`. |
 | `eat(item?)` / `eat_something()` | Eat named item or the best food in inventory. Clef: `setSlot`, `eat`. |
 | `drop(item, n)`, `drop_all(item)` | Clef: `dropItem`, `dropStack`. |
@@ -275,4 +280,27 @@ A foreground run returns its status, the value it `return`ed (lists capped at 40
 
 ## The endgame library
 
-`shem/lib/nether.shem`, `ender.shem` and `dragon.shem` are the road to the dragon as reusable scripts: `to_nether()`, `follow_eyes()` and `fill_portal()`/`enter_end()`, `beat_dragon()`. They lean on the bow primitives (`shoot`, `use_hold`, `use_release`) and dig defensively (staircases and floor checks, never straight down). `npm run check:shem` validates every library file against the block/item/entity registry with no body needed.
+`shem/lib/nether.shem`, `ender.shem`, `combat.shem`, `end.shem` and `dragon.shem` are the road to the
+dragon as reusable scripts: `to_nether()`, `follow_eyes()` and `fill_portal()`/`enter_end()`,
+`kit_up()`/`eat_if_hurt()`/`lead_shot()`/`back_off()`, the End's own arithmetic, and `beat_dragon()`.
+They dig defensively (staircases and floor checks, never straight down) and start with
+`require_dimension` where they hold hardcoded coordinates. `npm run check:shem` validates every
+library file against the block/item/entity registry with no body needed.
+
+`lib/end` is deliberately mechanics rather than a plan, because the plan is the part the mind should
+be doing:
+
+| Script | What it knows |
+|---|---|
+| `standoff_for(c)` | Where to stand to have a line on a crystal. Not underneath it: from four blocks out the shot passes through the pillar and no arc clears it, so the standoff is roughly the crystal's own height. |
+| `caged(c)` | Whether there are iron bars around it. Bars stop arrows completely. It cannot tell you *which* cage - open-topped ones take a steep shot, roofed ones take a pickaxe - so look before spending a quiver. |
+| `pop_crystal(c)` | Walk to the standoff and `shoot_static` it. |
+| `break_cage(c)` | The roofed ones: climb the pillar beside the crystal, mine the bars, walk twenty blocks clear, then shoot. The blast radius is six, and point blank is what kills you. |
+| `dragon_offset()` | How far the dragon is from the fountain. Under about 12 means it has perched, which is the only state in which it takes real damage. |
+| `in_the_end()` | `require_dimension("the_end")`. |
+
+Two facts about the fight that cost whole runs to learn, and are in those doc comments for that
+reason. A crystal heals the dragon only within 32 blocks of it, so an unreachable one on the ring is
+harmless *while the dragon is perched* - and worth exactly nothing as a rule if the dragon never
+perches, which is what a still-healing crystal causes. And a health bar pinned at exactly 200.0 under
+fire does not mean the arrows are missing; it means something is healing it as fast as you hurt it.

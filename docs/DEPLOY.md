@@ -7,11 +7,11 @@ control WebSocket with a shared token.
 
 ## On the body host
 
-Any x86-64 Linux box with Java 21 works (no root needed; everything below lives in the home directory).
+Any x86-64 Linux box with Java 25 works (no root needed; everything below lives in the home directory). Java 21 ran the launcher when this was written and no longer does - the current Clef jar throws `UnsupportedClassVersionError` on it.
 
 | what | where |
 |---|---|
-| JDK 21 (a Temurin tarball if the system JDK is older) | `~/jdk/jdk21` |
+| JDK 25 (a Temurin tarball if the system JDK is older) | `~/jdk/jdk25` |
 | launcher jar (copied from `data/clef/launcher.jar` on the Golem machine) | `~/golem-bodies/launcher.jar` |
 | per-body game dir and config | `~/golem-bodies/<Agent>/game/config/mezzoclef.json` |
 | logs | `~/golem-bodies/<Agent>/logs/clef.log` |
@@ -42,8 +42,8 @@ WorkingDirectory=%h/golem-bodies/<Agent>
 Environment=CLEF_GAMEDIR=%h/golem-bodies/<Agent>/game
 Environment=CLEF_MAX_HEAP=1024m
 Environment=CLEF_BG_THREADS=4
-Environment=JAVA_HOME=%h/jdk/jdk21
-ExecStart=%h/jdk/jdk21/bin/java -Dmezzoclef.headless=TRUE -jar %h/golem-bodies/launcher.jar
+Environment=JAVA_HOME=%h/jdk/jdk25
+ExecStart=%h/jdk/jdk25/bin/java -Dmezzoclef.headless=TRUE -jar %h/golem-bodies/launcher.jar
 Restart=always
 RestartSec=5
 StandardOutput=append:%h/golem-bodies/<Agent>/logs/clef.log
@@ -84,6 +84,43 @@ The control port carries a bearer token and nothing else, so keep it off the pub
 LAN, or a tailnet (which is also the easy answer when a host firewalls its LAN interface; check
 with `nc -z <host> 9731` from the Golem machine). The body needs to reach the Minecraft server
 too, in whatever direction your network allows.
+
+## Running an eval unattended on a headless Linux box
+
+A long rung (the dragon ones run up to two hours) wants to be somewhere that isn't a laptop that
+sleeps. The whole fleet - server, bodies, Golem, mind - moves to one Linux box happily, with three
+things that will each cost you an evening:
+
+- **Clef needs an X display even headless.** It asks GLFW for the null platform, but the bundled
+  GLFW still initialises X11 on Linux and dies with `DISPLAY environment variable is missing` over
+  SSH. Run it under `xvfb-run -a -s "-screen 0 1280x720x24"`. `-a` picks a free display instead of
+  fighting a desktop session already on `:1`.
+- **JDK 21 is not enough for the Clef jar** any more: it throws `UnsupportedClassVersionError`.
+  Install a JDK 25 tarball under `~/.local/jdk` and put it first on `PATH` - no root needed.
+- **Stop the mind before the bodies.** An eval supervises its Clef body and respawns it within
+  seconds, so killing bodies first just breeds new ones. Kill `cli/golem.ts` first, wait, then
+  `mezzoclef`.
+
+Two more traps in the stopping, both of which produced an orphan holding the MCP port while every
+relaunch failed:
+
+- The eval runs as `node src/cli/golem.ts ...` with **relative** paths, so a `pkill -f` matching the
+  checkout path misses it entirely.
+- `pkill -f` matches **your own** command line. Over SSH the pattern is in the shell's argv, so the
+  kill takes out the session that issued it and looks like the box hung. Put the pattern in a script
+  file, and skip `$$` when iterating.
+
+```bash
+# ~/run-golem-eval.sh <task-path> <label> [config]
+export PATH="$HOME/.local/jdk/jdk-25.0.4.1+1/bin:$HOME/.npm-global/bin:$PATH"
+cd "$HOME/coding/mc/Golem"
+exec xvfb-run -a -s "-screen 0 1280x720x24" \
+  node src/cli/golem.ts eval "$1" Tester --config "${3:-golem.eval.toml}" --label "$2"
+```
+
+Launch it with `ssh <host> 'nohup ~/run-golem-eval.sh tasks/endgame/7_dragon_hard.json run1 >/tmp/eval.log 2>&1 &'`
+and the run survives your laptop closing. `data/eval/*.json` is written when it ends either way, so
+`bin/golem eval-report` on the box is the result whether or not you were watching.
 
 ## Moving the rest
 

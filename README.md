@@ -161,9 +161,16 @@ forged, the base sealed before night, a corpse run after a drowning, four
 self-written scripts, zero tool errors. Seven eval tasks pass (wood, stone pickaxe,
 iron pickaxe, crafting table, smelting, sleep, script writing).
 
-Some things are stubbed or planned: `dig_down`, `tunnel` and `trade` in Shem,
-blueprints and `build`, cross-process fleet peering. See
-[docs/ROADMAP.md](docs/ROADMAP.md) for the full milestone list.
+**The endgame ladder is complete, 7/7.** A golem takes itself from a fresh spawn to
+a dead ender dragon one rung at a time (`tasks/endgame/`), and the last rung does it
+on normal difficulty with keepInventory *off*: gear drops where you fall, the way home
+is an end portal in an overworld room, and the crystals — two of them in sealed iron
+cages that need a pickaxe — are all still standing. 606 seconds, 4 turns, 1 death.
+
+Some things are stubbed or planned: `tunnel` and `trade` in Shem, blueprints and
+`build`, cross-process fleet peering. Stubs are marked in the registry, kept out of
+the mind's orientation, and warned about by the checker, so a script can't quietly
+depend on one. See [docs/ROADMAP.md](docs/ROADMAP.md) for the full milestone list.
 
 ## Docs
 

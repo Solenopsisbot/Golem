@@ -126,12 +126,72 @@ have to clear them — a from-scratch fight starts with ten, and clearing them i
 And 31 deaths is a war of attrition, not skill: it works because keepInventory and an in-dimension
 respawn make death cheap and dragon damage permanent.
 
-Open: crystal clearing inside the same run; and the reflex layer is still the weak link — the agent
-turned `self_preservation` off and left `dragon_fight` off, so the stalls were all periods where
-nothing useful ran between turns.
+Open at the time: crystal clearing inside the same run; and the reflex layer as the weak link — the
+agent turned `self_preservation` off and left `dragon_fight` off, so the stalls were all periods where
+nothing useful ran between turns. M7 below closes the first and leaves the second standing.
+
+## M7: Beat the game for real (done 2026-09-09)
+
+Rung 6 passes with keepInventory on, an in-dimension respawn and crystals that earlier world surgery
+had already removed. That is a dragon kill, but it is not the game: death is free and the hardest part
+of the fight is missing. `tasks/endgame/7_dragon_hard.json` is the same fight without the padding —
+normal difficulty, `keep_inventory` off, ten crystals standing (two of them caged), no respawn in the
+End at all, and the way back is a built end portal in an overworld room with five spare kits in a
+chest and nothing else in the world.
+
+**It passes: 606 s, 4 turns, 27 tool calls, 1 death.** Verified past the predicate —
+`execute if entity @e[type=minecraft:ender_dragon]` replies "Test failed" and the crystals are gone
+too. The full sequence on that rung, fable/fable:
+
+| Run | Result | Turns | Calls | Deaths | Models |
+|---|---|---|---|---|---|
+| 1 | timeout (7205 s) | 62 | 33 | 2 | opus / opus |
+| 2 | timeout (7207 s) | 22 | 57 | 3 | opus / opus |
+| 3 | timeout (7206 s) | 49 | 113 | 7 | fable / fable |
+| 4 | **success (606 s)** | 4 | 27 | 1 | fable / fable |
+
+Three things decided it, and only one of them is about Minecraft.
+
+- **`lib/dragon` was the trap, not the tool.** It aimed with a drop constant fitted at one range,
+  approached crystals to a flat 16 blocks (from which the pillar blocks every shot), and fought with
+  `attack()`, which does nothing to a multi-part boss. Both models reached for it, because the library
+  index is what a mind reasons from — so neither model was ever being tested. It now uses
+  `shoot_static`, `standoff_for` and `melee_while`, and the mechanics live in `lib/end` as primitives
+  the mind composes rather than as a plan it follows.
+- **`break_cage`.** Two crystals sat in fully enclosed iron-bar cages. Bars stop arrows at every
+  angle, and a crystal heals the dragon within 32 blocks — which is fine to ignore for a dragon that
+  perches, and fatal for one that does not, because the healing is *why* it never comes down. Ninety
+  seconds after the last cage came off with a pickaxe, the dragon went 200 → 104 → 0.
+- **Model routing was the throughput ceiling.** Opus act turns ran to 1524 s for 17 calls; the clock
+  ran out mid-thought. Moving both tiers to Fable took the same two hours from 22 turns to 49. The
+  turn budget, not the reasoning, was the binding constraint on a rung this long.
+
+Honest accounting of the rest: the other ~40 commits were infrastructure that lied. A headless client
+opens the pause screen and refuses every item use while reporting OK on all of it (three runs, 320
+arrows, zero shots fired). `self_preservation` "escaped" a dragon-breath cloud by stepping one block
+sideways and returned success. Damage interrupts cancelled the mind's turn before it ever finished
+one, four runs running. Four separate respawn bugs put the bot in the overworld, inside solid rock,
+seven blocks from the dragon's perch, and on the underside of the island over the void. `fresh_workspace`
+archived into the workspace it was clearing. `item replace block` silently refuses counts over 64, so
+the spare kits shipped with no arrows. They share a shape worth naming: the expensive bugs here almost
+never throw. They report success and do nothing, so every layer above them reads as working, and the
+only defence that ever caught one was checking the world instead of the return value.
+
+The agent found nine of those from inside the game, including two Clef bugs (#24 `equip` asserting a
+move it never checked, #25 `blockAt` unable to say "I don't know") and a residual error in the
+ballistics solver.
+
+Still open, and the reason a good run is still partly luck: **reflexes cancel the mind's scripts.**
+`self_preservation` at p90 interrupts whatever Shem is running, which is correct when it is pulling
+the bot out of dragon breath and wasteful when the two are not competing for the same actuator. Agents
+respond rationally by turning it off, and then die to a cloud. The state header now tells the mind what
+the reflexes have been doing, which is a workaround; letting a reflex act *without* cancelling when
+there is no contention is the fix.
 
 ## Minds beyond Claude Code
 
 `adapters/codex-acp.ts` is a Golem-owned ACP adapter over `codex app-server`, so OpenAI Codex (the installed CLI, any model it supports including gpt-6-astra) can be the mind. Proven end to end: session, MCP tools, streaming, chat. The ACP client in `src/mind/acp.ts` is unchanged; a mind is just a `command`/`args` in config.
+
+`golem.eval.codex.toml` points the eval fleet at it on the same ports as `golem.eval.toml` — same rungs, same body, same reflexes, only the thinker changes. Run one or the other, never both: they share the MCP bind and the Clef control port. Two adapter bugs came out of trying it, both of which made the config look honoured when it wasn't: `model/list` returns `{data:[...]}` and the adapter read `{items}`, got an empty list and silently fell back to the default model; and error notifications resolved as a bare refusal with the actual message dropped. Both fixed. **No endgame rung has been completed on Codex yet** — the attempt ran into those two bugs and the run was not repeated, so there is no comparable number here, only a working path.
 
 `adapters/llm-acp.ts` runs any OpenAI/Anthropic-compatible endpoint as a mind (chat, responses or anthropic wire), so Logfare and other Chat-Completions gateways are first-class. It connects to Golem's MCP server as a client and drives its own tool-calling loop.

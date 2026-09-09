@@ -120,6 +120,10 @@ bin/golem cost --hours 1          # tokens, calls per turn, compactions, tool hi
 Set `players.owners` in it to your username if you want to watch the Tester in chat; otherwise it's
 fine as shipped.
 
+`golem.eval.codex.toml` is the same fleet with OpenAI Codex as the mind (`adapters/codex-acp.ts`).
+It binds the same ports on purpose — same rungs, same body, same reflexes, so the two runs compare —
+which also means running both at once fails on the MCP bind and the Clef control port. Pick one.
+
 ## When something doesn't work
 
 - **Body never reaches "in world":** read `data/Clay/clef.log`. The first run's download can take

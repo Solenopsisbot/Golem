@@ -39,7 +39,11 @@ Scripts the agent writes live in `data/<agent>/workspace/shem/`; run traces in `
 
 ## Evals
 
-`tasks/basic/` is the survival ladder; `tasks/endgame/` runs the road to the dragon one rung at a time (each rung is set up with the previous rung's gear, and needs the dev server on normal difficulty: `MC_DIFFICULTY=normal scripts/dev-server.sh --bg`).
+`tasks/basic/` is the survival ladder; `tasks/endgame/` runs the road to the dragon one rung at a time (each rung is set up with the previous rung's gear, and needs the dev server on normal difficulty: `MC_DIFFICULTY=normal scripts/dev-server.sh --bg`). Rungs 1-5 are the road; `6_dragon` is the fight with `keep_inventory` on, and `7_dragon_hard` is the same fight with it off, through a built portal, with five spare kits and nothing else.
+
+Both dragon rungs need a world whose End still has its dragon, and a `/summon`ed one will not do: it has no `EndDragonFight` controller, so it never perches, never rolls a phase and cannot be killed by fighting it at all. `scripts/regen-end.sh` resets the island between attempts - it flushes and stops the server, moves `world/DIM1` aside and restarts, and the End regenerates with ten crystals and a new dragon on first entry.
+
+That works after an *aborted* run, not after a won one. Killing a dragon writes `DragonKilled` into `level.dat`, and the fight state outlives the region files: delete DIM1 after a kill and you get a fresh island with no dragon on it, which looks exactly like success until the bot arrives. The script refuses in that case. **Copy `data/server/world` before the first dragon run** and putting it back is one `mv`.
 
 ```bash
 bin/golem eval tasks/basic                 # every task in the folder, fresh mind session each
@@ -47,7 +51,17 @@ bin/golem eval tasks/basic/wood.json --label "opus-act"   # one task, tagged for
 bin/golem eval-report                                     # table of all results, grouped by label
 ```
 
-A task is a JSON file: a `goal` for the mind, a `setup` (RCON world reset: clear, give, teleport or `spread` onto safe surface ground near a point, time, weather, gamemode, raw commands), `success` predicates that must all hold at once (inventory with `*` wildcards, block, near, said, alive, script_exists), optional `fail` predicates, a `timeout_s`. Results land in `data/eval/*.json` with turns, tool calls, tokens, deaths and seconds. The runner owns the agent while it runs: stop `golem up` first. The dev server enables RCON on port 25576 with the password in `data/server/rcon.password`.
+A task is a JSON file: a `goal` for the mind, a `setup` (RCON world reset: clear, give, teleport or `spread` onto safe surface ground near a point, time, weather, gamemode, raw commands), `success` predicates that must all hold at once (inventory with `*` wildcards, block, near, said, alive, script_exists, dimension, rcon), optional `fail` predicates, a `timeout_s`. Results land in `data/eval/*.json` with turns, tool calls, tokens, deaths and seconds. The runner owns the agent while it runs: stop `golem up` first. The dev server enables RCON on port 25576 with the password in `data/server/rcon.password`. `src/eval/task.ts` is the schema and documents every field; the ones that shape a run rather than decorate it:
+
+| Field | Why it exists |
+|---|---|
+| `setup.arena` | A sealed, lit stone box with the bot in the middle. Combat rungs otherwise lose to the terrain lottery - real Nether ground is magma over a lava sea and kills the bot before it acts. `summon`ed mobs appear inside it. |
+| `setup.portal_room` | A lit overworld room with a working 3x3 `end_portal` (placed directly - a stronghold's own portal costs twelve eyes and is not what the rung measures), the spawnpoint set beside it, and chests holding `spares` copies of the `give` kit. This is the way home for a rung with `keep_inventory` off. |
+| `setup.keep_inventory` | On by default: a combat rung that strips the bot on every death makes each retry strictly worse than the last and measures despair. Off is the real game, and needs a `portal_room` to be fair. |
+| `setup.locate` | Put the bot near the nearest structure of a kind. `spread: true` (default) picks solid non-lava footing; a raw tp lands inside a wall. |
+| `fresh_workspace` | Archive the agent's own `shem/` scripts to `data/<agent>/script-archive/` before the run. A fresh mind with a workspace full of its previous attempts is not a fresh run - the scripts are in its orientation, so run N inherits run N-1's habits. Off by default; accumulating scripts is the point in normal play, just not in a measurement. |
+
+`give` entries are split into stacks automatically: `item replace block` silently refuses counts over 64, so `arrow 320` in a spare kit chest becomes five stacks rather than nothing at all.
 
 ## What it costs
 
